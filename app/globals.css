@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  --paper: #e9e5da;
-  --paper-raised: #f5f3ec;
-  --ink: #23261f;
-  --ink-soft: #5b5a4e;
-  --line: #c7c1ac;
+  --paper: #d8c19c;
+  --paper-raised: #e6d4b0;
+  --ink: #2a2015;
+  --ink-soft: #6b5a3d;
+  --line: #b7a374;
 
   --lane-karir: #3d5a73;
   --lane-relasi: #a65b62;
@@ -47,7 +47,7 @@ body {
   align-items: center;
   justify-content: center;
   border: 2px solid currentColor;
-  border-radius: 3px;
+  border-radius: 8px;
   padding: 0.15rem 0.55rem;
   font-family: var(--font-mono);
   font-weight: 700;
@@ -63,7 +63,7 @@ body {
   position: absolute;
   inset: 2px;
   border: 1px solid currentColor;
-  border-radius: 2px;
+  border-radius: 6px;
   opacity: 0.5;
   pointer-events: none;
 }

@@ -4,7 +4,7 @@ import { Stamp } from '@/components/canvas/nodes/Stamp'
 
 export function SegmentResult({ result, index }: { result: SegmentResultView; index: number }) {
   return (
-    <div className="border border-line bg-paper-raised p-3">
+    <div className="rounded-xl border border-line bg-paper-raised p-3">
       <div className="mb-1.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-ink-soft">
         Segment {index + 1}
       </div>

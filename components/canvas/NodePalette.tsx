@@ -36,7 +36,7 @@ export function NodePalette() {
                   key={label}
                   draggable
                   onDragStart={(e) => onDragStart(e, { type: 'aksi', lane, label })}
-                  className={`cursor-grab border border-l-4 ${style.border} bg-paper px-2 py-1.5 font-sans text-xs text-ink`}
+                  className={`cursor-grab rounded-lg border border-l-4 ${style.border} bg-paper px-2 py-1.5 font-sans text-xs text-ink`}
                 >
                   {label}
                 </div>
@@ -52,7 +52,7 @@ export function NodePalette() {
       <div
         draggable
         onDragStart={(e) => onDragStart(e, { type: 'merge' })}
-        className="flex cursor-grab items-center gap-1.5 border border-ink bg-ink px-2 py-1.5 font-mono text-xs text-paper"
+        className="flex cursor-grab items-center gap-1.5 rounded-full border border-ink bg-ink px-3 py-1.5 font-mono text-xs text-paper"
       >
         <GitMerge size={13} /> Merge
       </div>

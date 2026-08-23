@@ -16,7 +16,7 @@ export function AksiNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
 
   return (
     <div
-      className={`group relative w-60 border border-l-4 ${style.border} bg-paper-raised p-3 shadow-sm ${
+      className={`group relative w-60 rounded-xl border border-l-4 ${style.border} bg-paper-raised p-3 shadow-sm ${
         hasIssue ? 'outline outline-2 outline-stamp-red' : ''
       } ${isLoading ? 'animate-pulse' : ''}`}
       title={[...data.issues, data.runStatus === 'gagal' ? 'This step failed' : ''].filter(Boolean).join('\n')}
@@ -45,7 +45,7 @@ export function AksiNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
 
       <div className="mt-2.5 flex items-center gap-2">
         <select
-          className="nodrag border border-line bg-transparent font-mono text-[10px] uppercase text-ink-soft"
+          className="nodrag rounded-md border border-line bg-transparent font-mono text-[10px] uppercase text-ink-soft"
           value={lane}
           onChange={(e) => updateNode(id, { lane: e.target.value as Lane })}
         >
@@ -60,7 +60,7 @@ export function AksiNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
           type="number"
           min={1}
           max={15}
-          className="nodrag w-12 border border-line bg-transparent px-1 font-mono text-[11px] text-ink"
+          className="nodrag w-12 rounded-md border border-line bg-transparent px-1 font-mono text-[11px] text-ink"
           value={data.durasi ?? 1}
           onChange={(e) => updateNode(id, { durasi: Number(e.target.value) })}
         />
