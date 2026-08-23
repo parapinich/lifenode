@@ -1,7 +1,7 @@
 'use client'
 
 import '@xyflow/react/dist/style.css'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -9,6 +9,8 @@ import {
   Controls,
   useReactFlow,
   type Connection,
+  type Edge,
+  type EdgeChange,
   type Node,
   type NodeChange,
 } from '@xyflow/react'
@@ -19,10 +21,12 @@ import { StartNode } from './nodes/StartNode'
 import { AksiNode } from './nodes/AksiNode'
 import { MergeNode } from './nodes/MergeNode'
 import { EndNode } from './nodes/EndNode'
+import { DeletableEdge } from './edges/DeletableEdge'
 import type { LifeFlowNodeData } from './nodes/shared'
 import type { PaletteDragPayload } from './NodePalette'
 
 const nodeTypes = { start: StartNode, aksi: AksiNode, merge: MergeNode, end: EndNode }
+const edgeTypes = { deletable: DeletableEdge }
 
 export function Board() {
   const nodes = useGraphStore((s) => s.nodes)
@@ -71,7 +75,32 @@ export function Board() {
     [nodes, timing, issuesByNode, nodeStatus]
   )
 
-  const rfEdges = useMemo(() => edges.map((e) => ({ id: e.id, source: e.from, target: e.to })), [edges])
+  const [selectedEdgeIds, setSelectedEdgeIds] = useState<Set<string>>(new Set())
+
+  const rfEdges: Edge[] = useMemo(
+    () =>
+      edges.map((e) => ({
+        id: e.id,
+        source: e.from,
+        target: e.to,
+        type: 'deletable',
+        selected: selectedEdgeIds.has(e.id),
+      })),
+    [edges, selectedEdgeIds]
+  )
+
+  const onEdgesChange = useCallback((changes: EdgeChange[]) => {
+    for (const change of changes) {
+      if (change.type === 'select') {
+        setSelectedEdgeIds((prev) => {
+          const next = new Set(prev)
+          if (change.selected) next.add(change.id)
+          else next.delete(change.id)
+          return next
+        })
+      }
+    }
+  }, [])
 
   const onNodesChange = useCallback(
     (changes: NodeChange<Node<LifeFlowNodeData>>[]) => {
@@ -110,11 +139,13 @@ export function Board() {
         nodes={rfNodes}
         edges={rfEdges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         fitView
       >
-        <Background variant={BackgroundVariant.Dots} color="#c7c1ac" gap={22} size={1} bgColor="#e9e5da" />
+        <Background variant={BackgroundVariant.Dots} color="#a68e63" gap={22} size={1} bgColor="#d8c19c" />
         <Controls />
       </ReactFlow>
     </div>

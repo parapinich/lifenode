@@ -10,7 +10,7 @@ export function MergeNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
 
   return (
     <div
-      className={`group relative flex items-center gap-1.5 border border-line bg-ink px-3 py-2 text-paper shadow-sm ${
+      className={`group relative flex items-center gap-1.5 rounded-full border border-line bg-ink px-3.5 py-2 text-paper shadow-sm ${
         hasIssue ? 'outline outline-2 outline-stamp-red' : ''
       } ${isLoading ? 'animate-pulse' : ''}`}
       title={data.issues.join('\n')}
@@ -22,7 +22,7 @@ export function MergeNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
       </span>
       <button
         onClick={() => removeNode(id)}
-        className="nodrag absolute -right-2 -top-2 hidden h-5 w-5 items-center justify-center bg-stamp-red text-paper group-hover:flex"
+        className="nodrag absolute -right-2 -top-2 hidden h-5 w-5 items-center justify-center rounded-full bg-stamp-red text-paper group-hover:flex"
         title="Delete step"
       >
         <Trash2 size={11} />

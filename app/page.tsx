@@ -54,7 +54,7 @@ export default function Home() {
             <span className="font-mono text-[9px] uppercase tracking-wider text-ink-soft">Age at intake</span>
             <input
               type="number"
-              className="w-16 border-b border-line bg-transparent font-mono text-xs text-ink outline-none"
+              className="w-16 rounded-md border border-line bg-paper px-1.5 py-0.5 font-mono text-xs text-ink outline-none"
               value={kondisiAwal.umur}
               disabled={running}
               onChange={(e) => setKondisiAwal({ umur: Number(e.target.value) })}
@@ -65,7 +65,7 @@ export default function Home() {
             <span className="font-mono text-[9px] uppercase tracking-wider text-ink-soft">Starting funds</span>
             <input
               type="number"
-              className="w-28 border-b border-line bg-transparent font-mono text-xs text-ink outline-none"
+              className="w-28 rounded-md border border-line bg-paper px-1.5 py-0.5 font-mono text-xs text-ink outline-none"
               value={kondisiAwal.uang}
               disabled={running}
               onChange={(e) => setKondisiAwal({ uang: Number(e.target.value) })}
@@ -77,7 +77,7 @@ export default function Home() {
             <input
               type="text"
               maxLength={140}
-              className="w-full border-b border-line bg-transparent font-sans text-xs text-ink outline-none"
+              className="w-full rounded-md border border-line bg-paper px-1.5 py-0.5 font-sans text-xs text-ink outline-none"
               value={kondisiAwal.latarBelakang}
               disabled={running}
               onChange={(e) => setKondisiAwal({ latarBelakang: e.target.value })}
@@ -88,7 +88,7 @@ export default function Home() {
             disabled={!valid || running}
             title={valid ? undefined : issues.map((i) => i.pesan).join('\n')}
             onClick={() => executeGraph(nodes, edges, kondisiAwal)}
-            className="flex items-center gap-1.5 border border-ink bg-ink px-4 py-1.5 font-mono text-xs uppercase tracking-wider text-paper disabled:cursor-not-allowed disabled:border-line disabled:bg-line disabled:text-ink-soft"
+            className="flex items-center gap-1.5 rounded-lg border border-ink bg-ink px-4 py-1.5 font-mono text-xs uppercase tracking-wider text-paper disabled:cursor-not-allowed disabled:border-line disabled:bg-line disabled:text-ink-soft"
           >
             <Play size={12} /> {running ? 'Running…' : 'Execute'}
           </button>
@@ -97,7 +97,7 @@ export default function Home() {
             <button
               onClick={() => fetchSummary(kondisiAwal, lifeState)}
               disabled={summaryLoading}
-              className="flex items-center gap-1.5 border border-line bg-paper px-4 py-1.5 font-mono text-xs uppercase tracking-wider text-ink disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-lg border border-line bg-paper px-4 py-1.5 font-mono text-xs uppercase tracking-wider text-ink disabled:opacity-50"
             >
               <FileText size={12} /> {summaryLoading ? 'Filing…' : 'Close the case'}
             </button>

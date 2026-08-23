@@ -80,7 +80,7 @@ export function LifeCard({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4">
       <div className="max-h-full w-full max-w-md overflow-y-auto">
-        <div ref={cardRef} className="border-2 border-ink bg-paper-raised p-6">
+        <div ref={cardRef} className="rounded-2xl border-2 border-ink bg-paper-raised p-6">
           <div className="flex items-center justify-between border-b border-dashed border-line pb-2 font-mono text-[10px] uppercase tracking-widest text-ink-soft">
             <span>Case Closed</span>
             <span>No. {caseNo}</span>
@@ -122,7 +122,7 @@ export function LifeCard({
                 <span className="font-mono text-[10px] uppercase tracking-wider text-ink-soft">
                   {LANE_LABEL[s.lane]}
                 </span>
-                <span className="border border-ink px-2 py-0.5 font-mono text-[10px] font-semibold uppercase text-ink">
+                <span className="rounded-full border border-ink px-2.5 py-0.5 font-mono text-[10px] font-semibold uppercase text-ink">
                   {s.label}
                 </span>
               </div>
@@ -134,20 +134,20 @@ export function LifeCard({
           <button
             onClick={handleDownload}
             disabled={exporting}
-            className="flex items-center gap-1.5 border border-line bg-paper-raised px-3 py-1.5 font-mono text-[11px] uppercase text-ink disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg border border-line bg-paper-raised px-3 py-1.5 font-mono text-[11px] uppercase text-ink disabled:opacity-50"
           >
             <Download size={13} /> Save PNG
           </button>
           <button
             onClick={handleShare}
             disabled={exporting}
-            className="flex items-center gap-1.5 border border-line bg-paper-raised px-3 py-1.5 font-mono text-[11px] uppercase text-ink disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg border border-line bg-paper-raised px-3 py-1.5 font-mono text-[11px] uppercase text-ink disabled:opacity-50"
           >
             <Share2 size={13} /> Share
           </button>
           <button
             onClick={onClose}
-            className="flex items-center gap-1.5 border border-line bg-paper-raised px-3 py-1.5 font-mono text-[11px] uppercase text-ink"
+            className="flex items-center gap-1.5 rounded-lg border border-line bg-paper-raised px-3 py-1.5 font-mono text-[11px] uppercase text-ink"
           >
             <X size={13} /> Close
           </button>
