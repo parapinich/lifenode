@@ -7,6 +7,7 @@ import type { LifeFlowNodeData } from './shared'
 export function IfNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
   const removeNode = useGraphStore((s) => s.removeNode)
   const edges = useGraphStore((s) => s.edges)
+  const updateEdge = useGraphStore((s) => s.updateEdge)
   const running = useRunStore((s) => s.running)
   const hasIssue = data.issues.length > 0
   const isLoading = data.runStatus === 'loading'
@@ -35,14 +36,20 @@ export function IfNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
         <Split size={12} /> If{data.umurMulai !== undefined ? ` · age ${data.umurMulai}` : ''}
       </div>
 
-      <div className="mt-1.5 flex flex-col gap-0.5">
+      <div className="mt-1.5 flex flex-col gap-1">
         {branches.length === 0 ? (
           <span className="font-mono text-[10px] text-ink-soft">drag branches out &rarr;</span>
         ) : (
           branches.map((e) => (
-            <div key={e.id} className="truncate font-sans text-[11px] text-ink">
-              &bull; {e.label || <span className="italic text-ink-soft">unlabeled branch</span>}
-            </div>
+            <input
+              key={e.id}
+              className="nodrag w-full rounded-md border border-line bg-transparent px-1.5 py-0.5 font-sans text-[11px] text-ink outline-none placeholder:text-ink-soft disabled:opacity-70"
+              value={e.label ?? ''}
+              placeholder="condition for this branch..."
+              maxLength={60}
+              disabled={running}
+              onChange={(ev) => updateEdge(e.id, { label: ev.target.value })}
+            />
           ))
         )}
       </div>

@@ -23,7 +23,6 @@ export function DeletableEdge({
   data,
 }: EdgeProps<Edge>) {
   const removeEdge = useGraphStore((s) => s.removeEdge)
-  const updateEdge = useGraphStore((s) => s.updateEdge)
   const running = useRunStore((s) => s.running)
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
@@ -49,18 +48,17 @@ export function DeletableEdge({
           opacity: skipped ? 0.4 : 1,
         }}
       />
-      {isIfEdge && !running && (
+      {/* Kondisi cabang If diedit di node If sendiri (IfNode.tsx) — input biasa
+          di dalam node, bukan lewat portal ini. Di sini cuma ditampilin
+          read-only biar kebaca langsung di kanvas tanpa perlu klik node. */}
+      {isIfEdge && (
         <EdgeLabelRenderer>
-          <input
-            className="nodrag nopan absolute rounded-md border border-line bg-paper-raised px-1.5 py-0.5 text-center font-sans text-[10px] text-ink outline-none placeholder:text-ink-soft"
-            style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`, pointerEvents: 'all' }}
-            value={conditionLabel ?? ''}
-            placeholder="condition..."
-            maxLength={60}
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-            onChange={(e) => updateEdge(id, { label: e.target.value })}
-          />
+          <div
+            className="pointer-events-none absolute whitespace-nowrap rounded-md border border-line bg-paper-raised px-1.5 py-0.5 font-sans text-[10px] text-ink-soft"
+            style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
+          >
+            {conditionLabel || <span className="italic">unlabeled</span>}
+          </div>
         </EdgeLabelRenderer>
       )}
       {selected && !running && (
