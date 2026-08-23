@@ -1,10 +1,8 @@
-import { GoogleGenAI, ApiError } from '@google/genai'
 import { z } from 'zod'
 
-export const MODEL = 'gemini-3.6-flash'
+export const MODEL = 'openai/gpt-oss-120b'
 const MAX_ATTEMPT = 2
-
-const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 
 export class LLMError extends Error {
   status: number
@@ -19,28 +17,41 @@ export async function callStructuredLLM<T>(
   userMessage: string,
   schema: z.ZodType<T>
 ): Promise<T> {
+  // Groq's json_object mode only guarantees valid JSON, not a matching shape
+  // (unlike Gemini's responseJsonSchema) — spell out the schema in-prompt so
+  // the model has something to conform to.
+  const schemaHint = `\n\nOutput schema (JSON Schema):\n${JSON.stringify(z.toJSONSchema(schema))}`
   let extra = ''
 
   for (let attempt = 1; attempt <= MAX_ATTEMPT; attempt++) {
     let text: string | undefined
     try {
-      const response = await client.models.generateContent({
-        model: MODEL,
-        contents: userMessage + extra,
-        config: {
-          systemInstruction: system,
-          responseMimeType: 'application/json',
-          responseJsonSchema: z.toJSONSchema(schema),
+      const res = await fetch(GROQ_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          model: MODEL,
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: userMessage + schemaHint + extra },
+          ],
+          response_format: { type: 'json_object' },
+        }),
       })
-      text = response.text
-    } catch (e) {
-      if (e instanceof ApiError) {
-        if (e.status === 401 || e.status === 403) throw new LLMError('GEMINI_API_KEY is invalid or missing', 500)
-        if (e.status === 429) throw new LLMError('Rate limited by Gemini API, try again shortly', 429)
-        throw new LLMError(`Gemini API error: ${e.message}`, 502)
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) throw new LLMError('GROQ_API_KEY is invalid or missing', 500)
+        if (res.status === 429) throw new LLMError('Rate limited by Groq API, try again shortly', 429)
+        const body = await res.text().catch(() => '')
+        throw new LLMError(`Groq API error (${res.status}): ${body}`, 502)
       }
-      throw e
+      const data = await res.json()
+      text = data.choices?.[0]?.message?.content
+    } catch (e) {
+      if (e instanceof LLMError) throw e
+      throw new LLMError(`Groq API error: ${e instanceof Error ? e.message : String(e)}`, 502)
     }
 
     if (text) {

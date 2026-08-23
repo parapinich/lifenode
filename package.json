@@ -11,7 +11,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@google/genai": "^2.18.0",
     "@xyflow/react": "^12.11.3",
     "html-to-image": "^1.11.13",
     "lucide-react": "^1.33.0",
