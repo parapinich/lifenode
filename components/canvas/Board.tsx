@@ -38,6 +38,7 @@ export function Board() {
   const addAksiNode = useGraphStore((s) => s.addAksiNode)
   const addMergeNode = useGraphStore((s) => s.addMergeNode)
   const nodeStatus = useRunStore((s) => s.nodeStatus)
+  const running = useRunStore((s) => s.running)
   const layoutVersion = useGraphStore((s) => s.layoutVersion)
   const { screenToFlowPosition, fitView } = useReactFlow()
 
@@ -123,22 +124,24 @@ export function Board() {
 
   const onConnect = useCallback(
     (connection: Connection) => {
+      if (running) return
       if (connection.source && connection.target) addEdgeToStore(connection.source, connection.target)
     },
-    [addEdgeToStore]
+    [running, addEdgeToStore]
   )
 
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault()
-      const raw = event.dataTransfer.getData('application/lifeflow-node')
+      if (running) return
+      const raw = event.dataTransfer.getData('application/lifenode-node')
       if (!raw) return
       const payload: PaletteDragPayload = JSON.parse(raw)
       const pos = screenToFlowPosition({ x: event.clientX, y: event.clientY })
       if (payload.type === 'aksi') addAksiNode(payload.lane, payload.label, pos.x, pos.y)
       else addMergeNode(pos.x, pos.y)
     },
-    [screenToFlowPosition, addAksiNode, addMergeNode]
+    [running, screenToFlowPosition, addAksiNode, addMergeNode]
   )
 
   return (
@@ -152,6 +155,7 @@ export function Board() {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeDragStart={beginNodeDrag}
+        nodesConnectable={!running}
         fitView
       >
         <Background variant={BackgroundVariant.Dots} color="#a68e63" gap={22} size={1} bgColor="#d8c19c" />

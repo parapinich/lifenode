@@ -1,4 +1,5 @@
 import { GitMerge } from 'lucide-react'
+import { useRunStore } from '@/lib/runStore'
 import type { Lane } from '@/lib/schema'
 import { LANE_LABEL, LANE_STYLE } from './nodes/shared'
 
@@ -12,16 +13,22 @@ const PRESETS: Record<Lane, string[]> = {
 export type PaletteDragPayload = { type: 'aksi'; lane: Lane; label: string } | { type: 'merge' }
 
 function onDragStart(e: React.DragEvent, payload: PaletteDragPayload) {
-  e.dataTransfer.setData('application/lifeflow-node', JSON.stringify(payload))
+  e.dataTransfer.setData('application/lifenode-node', JSON.stringify(payload))
   e.dataTransfer.effectAllowed = 'move'
 }
 
 export function NodePalette() {
+  const running = useRunStore((s) => s.running)
+
   return (
     <aside className="w-60 shrink-0 overflow-y-auto border-r border-line bg-paper-raised p-3">
       <h2 className="mb-3 font-mono text-[10px] font-semibold uppercase tracking-widest text-ink-soft">
         Decision Catalog
       </h2>
+
+      {running && (
+        <p className="mb-3 font-mono text-[10px] text-ink-soft">Locked while the case is running.</p>
+      )}
 
       {(Object.keys(PRESETS) as Lane[]).map((lane) => {
         const style = LANE_STYLE[lane]
@@ -34,9 +41,11 @@ export function NodePalette() {
               {PRESETS[lane].map((label) => (
                 <div
                   key={label}
-                  draggable
+                  draggable={!running}
                   onDragStart={(e) => onDragStart(e, { type: 'aksi', lane, label })}
-                  className={`cursor-grab rounded-lg border border-l-4 ${style.border} bg-paper px-2 py-1.5 font-sans text-xs text-ink`}
+                  className={`rounded-lg border border-l-4 ${style.border} bg-paper px-2 py-1.5 font-sans text-xs text-ink ${
+                    running ? 'cursor-not-allowed opacity-40' : 'cursor-grab'
+                  }`}
                 >
                   {label}
                 </div>
@@ -50,9 +59,11 @@ export function NodePalette() {
         Sync point
       </div>
       <div
-        draggable
+        draggable={!running}
         onDragStart={(e) => onDragStart(e, { type: 'merge' })}
-        className="flex cursor-grab items-center gap-1.5 rounded-full border border-ink bg-ink px-3 py-1.5 font-mono text-xs text-paper"
+        className={`flex items-center gap-1.5 rounded-full border border-ink bg-ink px-3 py-1.5 font-mono text-xs text-paper ${
+          running ? 'cursor-not-allowed opacity-40' : 'cursor-grab'
+        }`}
       >
         <GitMerge size={13} /> Merge
       </div>

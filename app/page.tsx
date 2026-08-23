@@ -70,7 +70,7 @@ export default function Home() {
       <header className="border-b border-line bg-paper-raised px-4 py-2.5">
         <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
           <div>
-            <div className="font-display text-lg font-semibold leading-none text-ink">Lifeflow</div>
+            <div className="font-display text-lg font-semibold leading-none text-ink">Lifenode</div>
             <div className="font-mono text-[10px] uppercase tracking-widest text-ink-soft">Case Intake Form</div>
           </div>
 

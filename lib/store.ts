@@ -175,7 +175,7 @@ export const useGraphStore = create<GraphStore>()(
       }
     },
     {
-      name: 'lifeflow-graph',
+      name: 'lifenode-graph',
       partialize: (s) => ({ nodes: s.nodes, edges: s.edges, kondisiAwal: s.kondisiAwal }),
     }
   )

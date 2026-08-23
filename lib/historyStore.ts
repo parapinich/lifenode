@@ -28,6 +28,6 @@ export const useHistoryStore = create<HistoryStore>()(
         })),
       removeEntry: (id) => set((s) => ({ entries: s.entries.filter((e) => e.id !== id) })),
     }),
-    { name: 'lifeflow-history' }
+    { name: 'lifenode-history' }
   )
 )

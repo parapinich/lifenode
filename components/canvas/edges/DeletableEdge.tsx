@@ -1,9 +1,11 @@
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps, type Edge } from '@xyflow/react'
 import { X } from 'lucide-react'
 import { useGraphStore } from '@/lib/store'
+import { useRunStore } from '@/lib/runStore'
 
 export function DeletableEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, selected }: EdgeProps<Edge>) {
   const removeEdge = useGraphStore((s) => s.removeEdge)
+  const running = useRunStore((s) => s.running)
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
@@ -16,7 +18,7 @@ export function DeletableEdge({ id, sourceX, sourceY, targetX, targetY, sourcePo
   return (
     <>
       <BaseEdge id={id} path={edgePath} style={{ stroke: 'var(--ink-soft)', strokeWidth: selected ? 2.5 : 1.5 }} />
-      {selected && (
+      {selected && !running && (
         <EdgeLabelRenderer>
           <button
             onClick={(e) => {
