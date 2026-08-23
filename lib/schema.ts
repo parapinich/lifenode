@@ -77,6 +77,7 @@ export const CabangSchema = z.object({
       label: z.string(),
       durasi: z.number(),
       intensity: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      note: z.string().optional(),
     })
   ),
 })

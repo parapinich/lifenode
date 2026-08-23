@@ -3,11 +3,12 @@
 import dynamic from 'next/dynamic'
 import { ReactFlowProvider } from '@xyflow/react'
 import { useEffect, useMemo, useState } from 'react'
-import { FileText, History, LayoutGrid, PanelLeft, PanelRight, Play, Redo2, Sparkles, Undo2 } from 'lucide-react'
+import { Dices, FileText, History, LayoutGrid, PanelLeft, PanelRight, Play, Redo2, Sparkles, Undo2 } from 'lucide-react'
 import { useGraphStore } from '@/lib/store'
 import { useRunStore } from '@/lib/runStore'
 import { validateGraph } from '@/lib/graph'
 import { executeGraph, fetchSummary } from '@/lib/runExecute'
+import { randomBackstory } from '@/lib/nodeExamples'
 import { NodePalette } from '@/components/canvas/NodePalette'
 import { SegmentResult } from '@/components/result/SegmentResult'
 import { LifeCard } from '@/components/result/LifeCard'
@@ -98,14 +99,25 @@ export default function Home() {
 
           <label className="flex min-w-32 flex-1 flex-col gap-0.5">
             <span className="font-mono text-[9px] uppercase tracking-wider text-ink-soft">Background note</span>
-            <input
-              type="text"
-              maxLength={140}
-              className="w-full rounded-md border border-line bg-paper px-1.5 py-0.5 font-sans text-xs text-ink outline-none"
-              value={kondisiAwal.latarBelakang}
-              disabled={running}
-              onChange={(e) => setKondisiAwal({ latarBelakang: e.target.value })}
-            />
+            <div className="flex items-center gap-1">
+              <input
+                type="text"
+                maxLength={140}
+                className="w-full rounded-md border border-line bg-paper px-1.5 py-0.5 font-sans text-xs text-ink outline-none"
+                value={kondisiAwal.latarBelakang}
+                disabled={running}
+                onChange={(e) => setKondisiAwal({ latarBelakang: e.target.value })}
+              />
+              <button
+                type="button"
+                onClick={() => setKondisiAwal({ latarBelakang: randomBackstory() })}
+                disabled={running}
+                title="Randomize background note"
+                className="shrink-0 rounded-md border border-line bg-paper p-1 text-ink-soft hover:text-ink disabled:opacity-30"
+              >
+                <Dices size={13} />
+              </button>
+            </div>
           </label>
 
           <div className="flex items-center gap-1">

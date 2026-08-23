@@ -3,7 +3,18 @@ import { X } from 'lucide-react'
 import { useGraphStore } from '@/lib/store'
 import { useRunStore } from '@/lib/runStore'
 
-export function DeletableEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, selected }: EdgeProps<Edge>) {
+export function DeletableEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  selected,
+  animated,
+  data,
+}: EdgeProps<Edge>) {
   const removeEdge = useGraphStore((s) => s.removeEdge)
   const running = useRunStore((s) => s.running)
   const [edgePath, labelX, labelY] = getBezierPath({
@@ -15,9 +26,12 @@ export function DeletableEdge({ id, sourceX, sourceY, targetX, targetY, sourcePo
     targetPosition,
   })
 
+  const completed = (data as { completed?: boolean } | undefined)?.completed
+  const stroke = animated ? 'var(--stamp-red)' : completed ? 'var(--ink)' : 'var(--ink-soft)'
+
   return (
     <>
-      <BaseEdge id={id} path={edgePath} style={{ stroke: 'var(--ink-soft)', strokeWidth: selected ? 2.5 : 1.5 }} />
+      <BaseEdge id={id} path={edgePath} style={{ stroke, strokeWidth: selected || animated ? 2.5 : 1.5 }} />
       {selected && !running && (
         <EdgeLabelRenderer>
           <button

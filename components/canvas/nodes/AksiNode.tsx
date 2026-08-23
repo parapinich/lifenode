@@ -74,6 +74,16 @@ export function AksiNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
         <span className="font-mono text-[10px] text-ink-soft">yrs</span>
       </div>
 
+      <textarea
+        className="nodrag mt-2 w-full resize-none rounded-md border border-line bg-transparent p-1 font-sans text-[11px] text-ink outline-none placeholder:text-ink-soft disabled:opacity-70"
+        rows={2}
+        value={data.note ?? ''}
+        placeholder="Description (optional)..."
+        maxLength={140}
+        disabled={running}
+        onChange={(e) => updateNode(id, { note: e.target.value })}
+      />
+
       <div className="mt-2 flex items-center gap-2">
         <span className="font-mono text-[10px] text-ink-soft">Intensity</span>
         <input

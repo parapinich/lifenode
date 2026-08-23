@@ -3,6 +3,11 @@ import type { LifeState, RingkasanResponse, StatusNode } from './schema'
 
 export type NodeRunStatus = 'idle' | 'loading' | StatusNode
 
+const TERMINAL_STATUSES = new Set<NodeRunStatus>(['sukses', 'separuh', 'gagal'])
+export function isTerminalStatus(status: NodeRunStatus | undefined): boolean {
+  return status !== undefined && TERMINAL_STATUSES.has(status)
+}
+
 export interface SegmentResultView {
   segmentId: string
   narasiSegmen: string

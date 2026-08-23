@@ -7,6 +7,7 @@ import {
   Background,
   BackgroundVariant,
   Controls,
+  SelectionMode,
   useReactFlow,
   type Connection,
   type Edge,
@@ -15,7 +16,7 @@ import {
   type NodeChange,
 } from '@xyflow/react'
 import { useGraphStore } from '@/lib/store'
-import { useRunStore } from '@/lib/runStore'
+import { useRunStore, isTerminalStatus } from '@/lib/runStore'
 import { computeGraph, validateGraph } from '@/lib/graph'
 import { StartNode } from './nodes/StartNode'
 import { AksiNode } from './nodes/AksiNode'
@@ -37,6 +38,7 @@ export function Board() {
   const addEdgeToStore = useGraphStore((s) => s.addEdge)
   const addAksiNode = useGraphStore((s) => s.addAksiNode)
   const addMergeNode = useGraphStore((s) => s.addMergeNode)
+  const removeNode = useGraphStore((s) => s.removeNode)
   const nodeStatus = useRunStore((s) => s.nodeStatus)
   const running = useRunStore((s) => s.running)
   const layoutVersion = useGraphStore((s) => s.layoutVersion)
@@ -67,12 +69,15 @@ export function Board() {
     }
   }, [nodes, edges, kondisiAwal.umur])
 
+  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set())
+
   const rfNodes: Node<LifeFlowNodeData>[] = useMemo(
     () =>
       nodes.map((n) => ({
         id: n.id,
         type: n.kind,
         position: { x: n.x, y: n.y },
+        selected: selectedNodeIds.has(n.id),
         data: {
           ...n,
           umurMulai: timing?.[n.id]?.umurMulai,
@@ -81,21 +86,31 @@ export function Board() {
           runStatus: nodeStatus[n.id],
         },
       })),
-    [nodes, timing, issuesByNode, nodeStatus]
+    [nodes, timing, issuesByNode, nodeStatus, selectedNodeIds]
   )
 
   const [selectedEdgeIds, setSelectedEdgeIds] = useState<Set<string>>(new Set())
 
   const rfEdges: Edge[] = useMemo(
     () =>
-      edges.map((e) => ({
-        id: e.id,
-        source: e.from,
-        target: e.to,
-        type: 'deletable',
-        selected: selectedEdgeIds.has(e.id),
-      })),
-    [edges, selectedEdgeIds]
+      edges.map((e) => {
+        const toStatus = nodeStatus[e.to]
+        const fromStatus = nodeStatus[e.from]
+        // Sync nodes (start/merge/end) never get their own runStatus — an edge
+        // into one of them reads as "completed" once its source settled.
+        const active = toStatus === 'loading'
+        const completed = !active && (isTerminalStatus(toStatus) || isTerminalStatus(fromStatus))
+        return {
+          id: e.id,
+          source: e.from,
+          target: e.to,
+          type: 'deletable',
+          selected: selectedEdgeIds.has(e.id),
+          animated: active,
+          data: { completed },
+        }
+      }),
+    [edges, selectedEdgeIds, nodeStatus]
   )
 
   const onEdgesChange = useCallback((changes: EdgeChange[]) => {
@@ -116,10 +131,20 @@ export function Board() {
       for (const change of changes) {
         if (change.type === 'position' && change.position) {
           moveNode(change.id, change.position.x, change.position.y)
+        } else if (change.type === 'select') {
+          setSelectedNodeIds((prev) => {
+            const next = new Set(prev)
+            if (change.selected) next.add(change.id)
+            else next.delete(change.id)
+            return next
+          })
+        } else if (change.type === 'remove') {
+          if (running) continue
+          removeNode(change.id)
         }
       }
     },
-    [moveNode]
+    [moveNode, removeNode, running]
   )
 
   const onConnect = useCallback(
@@ -156,6 +181,10 @@ export function Board() {
         onConnect={onConnect}
         onNodeDragStart={beginNodeDrag}
         nodesConnectable={!running}
+        panOnDrag={[1]}
+        selectionOnDrag
+        selectionMode={SelectionMode.Partial}
+        deleteKeyCode={['Backspace', 'Delete']}
         fitView
       >
         <Background variant={BackgroundVariant.Dots} color="#a68e63" gap={22} size={1} bgColor="#d8c19c" />

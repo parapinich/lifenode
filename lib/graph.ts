@@ -303,6 +303,7 @@ export function segmentCabang(
         label: n.label ?? '',
         durasi: n.durasi ?? 0,
         intensity: n.intensity ?? 1,
+        note: n.note,
       })),
     })
   }
