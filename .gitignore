@@ -36,6 +36,11 @@ yarn-error.log*
 # vercel
 .vercel
 
+# agent instruction docs — local dev reference only, not published
+/AGENTS.md
+/CLAUDE.md
+/PLAN.md
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
