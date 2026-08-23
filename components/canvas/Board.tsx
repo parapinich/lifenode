@@ -1,7 +1,7 @@
 'use client'
 
 import '@xyflow/react/dist/style.css'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -33,11 +33,19 @@ export function Board() {
   const edges = useGraphStore((s) => s.edges)
   const kondisiAwal = useGraphStore((s) => s.kondisiAwal)
   const moveNode = useGraphStore((s) => s.moveNode)
+  const beginNodeDrag = useGraphStore((s) => s.beginNodeDrag)
   const addEdgeToStore = useGraphStore((s) => s.addEdge)
   const addAksiNode = useGraphStore((s) => s.addAksiNode)
   const addMergeNode = useGraphStore((s) => s.addMergeNode)
   const nodeStatus = useRunStore((s) => s.nodeStatus)
-  const { screenToFlowPosition } = useReactFlow()
+  const layoutVersion = useGraphStore((s) => s.layoutVersion)
+  const { screenToFlowPosition, fitView } = useReactFlow()
+
+  useEffect(() => {
+    if (layoutVersion === 0) return
+    const id = requestAnimationFrame(() => fitView({ duration: 300, padding: 0.15 }))
+    return () => cancelAnimationFrame(id)
+  }, [layoutVersion, fitView])
 
   const issues = useMemo(() => validateGraph({ nodes, edges }), [nodes, edges])
   const issuesByNode = useMemo(() => {
@@ -143,6 +151,7 @@ export function Board() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onNodeDragStart={beginNodeDrag}
         fitView
       >
         <Background variant={BackgroundVariant.Dots} color="#a68e63" gap={22} size={1} bgColor="#d8c19c" />

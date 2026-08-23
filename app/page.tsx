@@ -2,8 +2,8 @@
 
 import dynamic from 'next/dynamic'
 import { ReactFlowProvider } from '@xyflow/react'
-import { useMemo } from 'react'
-import { FileText, Play } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { FileText, History, LayoutGrid, PanelLeft, PanelRight, Play, Redo2, Sparkles, Undo2 } from 'lucide-react'
 import { useGraphStore } from '@/lib/store'
 import { useRunStore } from '@/lib/runStore'
 import { validateGraph } from '@/lib/graph'
@@ -11,6 +11,7 @@ import { executeGraph, fetchSummary } from '@/lib/runExecute'
 import { NodePalette } from '@/components/canvas/NodePalette'
 import { SegmentResult } from '@/components/result/SegmentResult'
 import { LifeCard } from '@/components/result/LifeCard'
+import { HistoryPanel } from '@/components/result/HistoryPanel'
 
 const Board = dynamic(() => import('@/components/canvas/Board').then((m) => m.Board), { ssr: false })
 
@@ -27,6 +28,12 @@ export default function Home() {
   const edges = useGraphStore((s) => s.edges)
   const kondisiAwal = useGraphStore((s) => s.kondisiAwal)
   const setKondisiAwal = useGraphStore((s) => s.setKondisiAwal)
+  const loadTemplate = useGraphStore((s) => s.loadTemplate)
+  const applyAutoLayout = useGraphStore((s) => s.applyAutoLayout)
+  const undo = useGraphStore((s) => s.undo)
+  const redo = useGraphStore((s) => s.redo)
+  const canUndo = useGraphStore((s) => s.past.length > 0)
+  const canRedo = useGraphStore((s) => s.future.length > 0)
 
   const running = useRunStore((s) => s.running)
   const lifeState = useRunStore((s) => s.lifeState)
@@ -37,14 +44,31 @@ export default function Home() {
   const summaryError = useRunStore((s) => s.summaryError)
   const closeSummary = useRunStore((s) => s.closeSummary)
 
+  const [showPalette, setShowPalette] = useState(true)
+  const [showResults, setShowResults] = useState(true)
+  const [showHistory, setShowHistory] = useState(false)
+
   const issues = useMemo(() => validateGraph({ nodes, edges }), [nodes, edges])
   const valid = issues.length === 0
   const runFinished = !running && results.length > 0 && lifeState !== null
 
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const tag = (document.activeElement?.tagName ?? '').toLowerCase()
+      if (tag === 'input' || tag === 'select' || tag === 'textarea') return
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return
+      e.preventDefault()
+      if (e.shiftKey) redo()
+      else undo()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [undo, redo])
+
   return (
     <div className="flex h-screen flex-col">
       <header className="border-b border-line bg-paper-raised px-4 py-2.5">
-        <div className="flex flex-wrap items-end gap-x-5 gap-y-2">
+        <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
           <div>
             <div className="font-display text-lg font-semibold leading-none text-ink">Lifeflow</div>
             <div className="font-mono text-[10px] uppercase tracking-widest text-ink-soft">Case Intake Form</div>
@@ -65,14 +89,14 @@ export default function Home() {
             <span className="font-mono text-[9px] uppercase tracking-wider text-ink-soft">Starting funds</span>
             <input
               type="number"
-              className="w-28 rounded-md border border-line bg-paper px-1.5 py-0.5 font-mono text-xs text-ink outline-none"
+              className="w-24 rounded-md border border-line bg-paper px-1.5 py-0.5 font-mono text-xs text-ink outline-none"
               value={kondisiAwal.uang}
               disabled={running}
               onChange={(e) => setKondisiAwal({ uang: Number(e.target.value) })}
             />
           </label>
 
-          <label className="flex flex-1 min-w-40 flex-col gap-0.5">
+          <label className="flex min-w-32 flex-1 flex-col gap-0.5">
             <span className="font-mono text-[9px] uppercase tracking-wider text-ink-soft">Background note</span>
             <input
               type="text"
@@ -83,6 +107,62 @@ export default function Home() {
               onChange={(e) => setKondisiAwal({ latarBelakang: e.target.value })}
             />
           </label>
+
+          <div className="flex items-center gap-1">
+            <button
+              onClick={undo}
+              disabled={!canUndo || running}
+              title="Undo (Ctrl+Z)"
+              className="rounded-lg border border-line bg-paper p-1.5 text-ink disabled:opacity-30"
+            >
+              <Undo2 size={14} />
+            </button>
+            <button
+              onClick={redo}
+              disabled={!canRedo || running}
+              title="Redo (Ctrl+Shift+Z)"
+              className="rounded-lg border border-line bg-paper p-1.5 text-ink disabled:opacity-30"
+            >
+              <Redo2 size={14} />
+            </button>
+            <button
+              onClick={loadTemplate}
+              disabled={running}
+              title="Load an example case"
+              className="rounded-lg border border-line bg-paper p-1.5 text-ink disabled:opacity-30"
+            >
+              <Sparkles size={14} />
+            </button>
+            <button
+              onClick={applyAutoLayout}
+              disabled={running || !valid}
+              title="Tidy up node positions"
+              className="rounded-lg border border-line bg-paper p-1.5 text-ink disabled:opacity-30"
+            >
+              <LayoutGrid size={14} />
+            </button>
+            <button
+              onClick={() => setShowHistory(true)}
+              title="Case history"
+              className="rounded-lg border border-line bg-paper p-1.5 text-ink"
+            >
+              <History size={14} />
+            </button>
+            <button
+              onClick={() => setShowPalette((v) => !v)}
+              title="Toggle decision catalog"
+              className={`rounded-lg border border-line p-1.5 text-ink lg:hidden ${showPalette ? 'bg-ink text-paper' : 'bg-paper'}`}
+            >
+              <PanelLeft size={14} />
+            </button>
+            <button
+              onClick={() => setShowResults((v) => !v)}
+              title="Toggle case file panel"
+              className={`rounded-lg border border-line p-1.5 text-ink lg:hidden ${showResults ? 'bg-ink text-paper' : 'bg-paper'}`}
+            >
+              <PanelRight size={14} />
+            </button>
+          </div>
 
           <button
             disabled={!valid || running}
@@ -132,12 +212,12 @@ export default function Home() {
       )}
 
       <div className="flex flex-1 overflow-hidden">
-        <NodePalette />
+        {showPalette && <NodePalette />}
         <ReactFlowProvider>
           <Board />
         </ReactFlowProvider>
-        {results.length > 0 && (
-          <aside className="w-80 shrink-0 overflow-y-auto border-l border-line bg-paper p-3">
+        {showResults && results.length > 0 && (
+          <aside className="w-72 shrink-0 overflow-y-auto border-l border-line bg-paper p-3 lg:w-80">
             <h2 className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-widest text-ink-soft">
               Case File
             </h2>
@@ -153,6 +233,7 @@ export default function Home() {
       {summary && lifeState && (
         <LifeCard summary={summary} kondisiAwal={kondisiAwal} stateAkhir={lifeState} onClose={closeSummary} />
       )}
+      {showHistory && <HistoryPanel onClose={() => setShowHistory(false)} />}
     </div>
   )
 }
