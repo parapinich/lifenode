@@ -90,10 +90,10 @@ The LLM never holds state itself. The full `LifeState` is sent fresh with every 
 npm install
 ```
 
-Create `.env.local` with a Gemini API key:
+Create `.env.local` with a Groq API key:
 
 ```
-GEMINI_API_KEY=your-key-here
+GROQ_API_KEY=your-key-here
 ```
 
 Then:
@@ -122,7 +122,7 @@ Open [http://localhost:3000](http://localhost:3000).
 - Zustand for graph state and run state
 - Zod for validation at every boundary (player input, LLM output, request bodies)
 - Tailwind for styling
-- Google Gen AI SDK (`gemini-3.6-flash`) for the segment narration, branch decisions, and closing summary
+- Groq API (OpenAI-compatible REST, `openai/gpt-oss-120b`) for the segment narration, branch decisions, and closing summary
 
 ## Project structure
 
