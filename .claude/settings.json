@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/check-graph.js",
+            "timeout": 60,
+            "statusMessage": "Checking graph engine invariants..."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/block-env-edit.js",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
