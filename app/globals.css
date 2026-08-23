@@ -1,26 +1,69 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper: #e9e5da;
+  --paper-raised: #f5f3ec;
+  --ink: #23261f;
+  --ink-soft: #5b5a4e;
+  --line: #c7c1ac;
+
+  --lane-karir: #3d5a73;
+  --lane-relasi: #a65b62;
+  --lane-kesehatan: #4f7a6b;
+  --lane-chaos: #6b4e71;
+
+  --stamp-red: #a63a2e;
+  --stamp-green: #3f7a4f;
+  --stamp-amber: #b8862c;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-paper: var(--paper);
+  --color-paper-raised: var(--paper-raised);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-line: var(--line);
+  --color-lane-karir: var(--lane-karir);
+  --color-lane-relasi: var(--lane-relasi);
+  --color-lane-kesehatan: var(--lane-kesehatan);
+  --color-lane-chaos: var(--lane-chaos);
+  --color-stamp-red: var(--stamp-red);
+  --color-stamp-green: var(--stamp-green);
+  --color-stamp-amber: var(--stamp-amber);
+  --font-display: var(--font-fraunces);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  background: var(--paper);
+  color: var(--ink);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Rubber-stamp status badge — the game's signature motif: every verdict
+   (node result, life-card score) reads like it got stamped into a case file. */
+.stamp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid currentColor;
+  border-radius: 3px;
+  padding: 0.15rem 0.55rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  position: relative;
+  transform: rotate(var(--stamp-tilt, -4deg));
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+.stamp::before {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  opacity: 0.5;
+  pointer-events: none;
 }

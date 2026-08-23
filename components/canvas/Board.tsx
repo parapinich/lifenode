@@ -1,0 +1,122 @@
+'use client'
+
+import '@xyflow/react/dist/style.css'
+import { useCallback, useMemo } from 'react'
+import {
+  ReactFlow,
+  Background,
+  BackgroundVariant,
+  Controls,
+  useReactFlow,
+  type Connection,
+  type Node,
+  type NodeChange,
+} from '@xyflow/react'
+import { useGraphStore } from '@/lib/store'
+import { useRunStore } from '@/lib/runStore'
+import { computeGraph, validateGraph } from '@/lib/graph'
+import { StartNode } from './nodes/StartNode'
+import { AksiNode } from './nodes/AksiNode'
+import { MergeNode } from './nodes/MergeNode'
+import { EndNode } from './nodes/EndNode'
+import type { LifeFlowNodeData } from './nodes/shared'
+import type { PaletteDragPayload } from './NodePalette'
+
+const nodeTypes = { start: StartNode, aksi: AksiNode, merge: MergeNode, end: EndNode }
+
+export function Board() {
+  const nodes = useGraphStore((s) => s.nodes)
+  const edges = useGraphStore((s) => s.edges)
+  const kondisiAwal = useGraphStore((s) => s.kondisiAwal)
+  const moveNode = useGraphStore((s) => s.moveNode)
+  const addEdgeToStore = useGraphStore((s) => s.addEdge)
+  const addAksiNode = useGraphStore((s) => s.addAksiNode)
+  const addMergeNode = useGraphStore((s) => s.addMergeNode)
+  const nodeStatus = useRunStore((s) => s.nodeStatus)
+  const { screenToFlowPosition } = useReactFlow()
+
+  const issues = useMemo(() => validateGraph({ nodes, edges }), [nodes, edges])
+  const issuesByNode = useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const issue of issues) {
+      if (!issue.nodeId) continue
+      if (!map.has(issue.nodeId)) map.set(issue.nodeId, [])
+      map.get(issue.nodeId)!.push(issue.pesan)
+    }
+    return map
+  }, [issues])
+
+  const timing = useMemo(() => {
+    try {
+      return computeGraph({ nodes, edges }, kondisiAwal.umur).timing
+    } catch {
+      return null
+    }
+  }, [nodes, edges, kondisiAwal.umur])
+
+  const rfNodes: Node<LifeFlowNodeData>[] = useMemo(
+    () =>
+      nodes.map((n) => ({
+        id: n.id,
+        type: n.kind,
+        position: { x: n.x, y: n.y },
+        data: {
+          ...n,
+          umurMulai: timing?.[n.id]?.umurMulai,
+          umurSelesai: timing?.[n.id]?.umurSelesai,
+          issues: issuesByNode.get(n.id) ?? [],
+          runStatus: nodeStatus[n.id],
+        },
+      })),
+    [nodes, timing, issuesByNode, nodeStatus]
+  )
+
+  const rfEdges = useMemo(() => edges.map((e) => ({ id: e.id, source: e.from, target: e.to })), [edges])
+
+  const onNodesChange = useCallback(
+    (changes: NodeChange<Node<LifeFlowNodeData>>[]) => {
+      for (const change of changes) {
+        if (change.type === 'position' && change.position) {
+          moveNode(change.id, change.position.x, change.position.y)
+        }
+      }
+    },
+    [moveNode]
+  )
+
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      if (connection.source && connection.target) addEdgeToStore(connection.source, connection.target)
+    },
+    [addEdgeToStore]
+  )
+
+  const onDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault()
+      const raw = event.dataTransfer.getData('application/lifeflow-node')
+      if (!raw) return
+      const payload: PaletteDragPayload = JSON.parse(raw)
+      const pos = screenToFlowPosition({ x: event.clientX, y: event.clientY })
+      if (payload.type === 'aksi') addAksiNode(payload.lane, payload.label, pos.x, pos.y)
+      else addMergeNode(pos.x, pos.y)
+    },
+    [screenToFlowPosition, addAksiNode, addMergeNode]
+  )
+
+  return (
+    <div className="flex-1" onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
+      <ReactFlow
+        nodes={rfNodes}
+        edges={rfEdges}
+        nodeTypes={nodeTypes}
+        onNodesChange={onNodesChange}
+        onConnect={onConnect}
+        fitView
+      >
+        <Background variant={BackgroundVariant.Dots} color="#c7c1ac" gap={22} size={1} bgColor="#e9e5da" />
+        <Controls />
+      </ReactFlow>
+    </div>
+  )
+}
