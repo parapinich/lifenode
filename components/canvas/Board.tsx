@@ -1,7 +1,7 @@
 'use client'
 
 import '@xyflow/react/dist/style.css'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -33,11 +33,20 @@ export function Board() {
   const edges = useGraphStore((s) => s.edges)
   const kondisiAwal = useGraphStore((s) => s.kondisiAwal)
   const moveNode = useGraphStore((s) => s.moveNode)
+  const beginNodeDrag = useGraphStore((s) => s.beginNodeDrag)
   const addEdgeToStore = useGraphStore((s) => s.addEdge)
   const addAksiNode = useGraphStore((s) => s.addAksiNode)
   const addMergeNode = useGraphStore((s) => s.addMergeNode)
   const nodeStatus = useRunStore((s) => s.nodeStatus)
-  const { screenToFlowPosition } = useReactFlow()
+  const running = useRunStore((s) => s.running)
+  const layoutVersion = useGraphStore((s) => s.layoutVersion)
+  const { screenToFlowPosition, fitView } = useReactFlow()
+
+  useEffect(() => {
+    if (layoutVersion === 0) return
+    const id = requestAnimationFrame(() => fitView({ duration: 300, padding: 0.15 }))
+    return () => cancelAnimationFrame(id)
+  }, [layoutVersion, fitView])
 
   const issues = useMemo(() => validateGraph({ nodes, edges }), [nodes, edges])
   const issuesByNode = useMemo(() => {
@@ -115,22 +124,24 @@ export function Board() {
 
   const onConnect = useCallback(
     (connection: Connection) => {
+      if (running) return
       if (connection.source && connection.target) addEdgeToStore(connection.source, connection.target)
     },
-    [addEdgeToStore]
+    [running, addEdgeToStore]
   )
 
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault()
-      const raw = event.dataTransfer.getData('application/lifeflow-node')
+      if (running) return
+      const raw = event.dataTransfer.getData('application/lifenode-node')
       if (!raw) return
       const payload: PaletteDragPayload = JSON.parse(raw)
       const pos = screenToFlowPosition({ x: event.clientX, y: event.clientY })
       if (payload.type === 'aksi') addAksiNode(payload.lane, payload.label, pos.x, pos.y)
       else addMergeNode(pos.x, pos.y)
     },
-    [screenToFlowPosition, addAksiNode, addMergeNode]
+    [running, screenToFlowPosition, addAksiNode, addMergeNode]
   )
 
   return (
@@ -143,6 +154,8 @@ export function Board() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onNodeDragStart={beginNodeDrag}
+        nodesConnectable={!running}
         fitView
       >
         <Background variant={BackgroundVariant.Dots} color="#a68e63" gap={22} size={1} bgColor="#d8c19c" />

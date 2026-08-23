@@ -1,6 +1,7 @@
 import { computeGraph } from './graph'
 import { appendLedger, applyDelta } from './engine'
 import { useRunStore } from './runStore'
+import { useHistoryStore } from './historyStore'
 import {
   RingkasanResponseSchema,
   SegmentResponseSchema,
@@ -81,7 +82,9 @@ export async function fetchSummary(kondisiAwal: KondisiAwal, stateAkhir: LifeSta
       const detail = await res.json().catch(() => null)
       throw new Error(detail?.error ?? `Call to /api/summary failed (${res.status})`)
     }
-    setSummary(RingkasanResponseSchema.parse(await res.json()))
+    const summary = RingkasanResponseSchema.parse(await res.json())
+    setSummary(summary)
+    useHistoryStore.getState().addEntry({ kondisiAwal, stateAkhir, summary })
   } catch (e) {
     failSummary(e instanceof Error ? e.message : 'Summary failed to generate')
   }

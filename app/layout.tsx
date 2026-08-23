@@ -19,7 +19,7 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "Lifeflow",
+  title: "Lifenode",
   description: "Plan a life on a node canvas. Watch it fall apart.",
 };
 

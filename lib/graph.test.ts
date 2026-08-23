@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Edge, Graph, LifeNode } from './schema'
-import { GraphCycleError, computeGraph, segmentCabang, topologicalSort, validateGraph } from './graph'
+import { GraphCycleError, autoLayout, computeGraph, segmentCabang, topologicalSort, validateGraph } from './graph'
 
 function node(partial: Partial<LifeNode> & { id: string; kind: LifeNode['kind'] }): LifeNode {
   return { x: 0, y: 0, ...partial }
@@ -80,6 +80,15 @@ describe('graf bercabang dengan merge timpang', () => {
     expect(karir.gapTahun).toBe(0)
     expect(relasi.gapTahun).toBe(6)
     expect(karir.nodes).toEqual([{ id: 'karir', label: 'Buka warung', durasi: 9, intensity: 3 }])
+  })
+
+  it('autoLayout nempatin node per lane band dan x ngikutin umur', () => {
+    const positions = autoLayout(graph, 20)
+    expect(positions.karir.x).toBe(positions.relasi.x)
+    expect(positions.karir.x).toBeGreaterThan(positions.start.x)
+    expect(positions.karir.y).not.toBe(positions.relasi.y)
+    expect(positions.merge1.x).toBeGreaterThan(positions.karir.x)
+    expect(positions.end.x).toBeGreaterThan(positions.merge1.x)
   })
 })
 

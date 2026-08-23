@@ -1,6 +1,6 @@
 import type { RingkasanRequest, SegmentRequest } from './schema'
 
-export const SYSTEM_PROMPT = `You write the narrative for "Lifeflow": a game where the player lays out a life plan on a node canvas, and you narrate how it falls apart. Tone: deadpan absurdist comedy, in English.
+export const SYSTEM_PROMPT = `You write the narrative for "Lifenode": a game where the player lays out a life plan on a node canvas, and you narrate how it falls apart. Tone: deadpan absurdist comedy, in English.
 
 Seven mandatory rules:
 
@@ -20,7 +20,7 @@ export function buildSegmentUserMessage(request: SegmentRequest): string {
   return `<segment_data>\n${JSON.stringify(request, null, 2)}\n</segment_data>\n\nWrite this segment's result matching the output schema.`
 }
 
-export const SUMMARY_SYSTEM_PROMPT = `You write the closing summary card for "Lifeflow" — the screenshot-worthy card a player gets at the end of a run. Same deadpan absurdist tone as the rest of the game: English, informal, no emoji, consequences follow logically from an absurd premise.
+export const SUMMARY_SYSTEM_PROMPT = `You write the closing summary card for "Lifenode" — the screenshot-worthy card a player gets at the end of a run. Same deadpan absurdist tone as the rest of the game: English, informal, no emoji, consequences follow logically from an absurd premise.
 
 You're given the player's starting condition and final life state (including the full ledger of key events from the run). Produce:
 - judulHidup: a short, sharp life title (2-6 words), like an obituary headline. Specific to what actually happened, not generic.

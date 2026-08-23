@@ -49,7 +49,7 @@ export function LifeCard({
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `lifeflow-${caseNo}.png`
+      a.download = `lifenode-${caseNo}.png`
       a.click()
       URL.revokeObjectURL(url)
     } finally {
@@ -62,11 +62,11 @@ export function LifeCard({
     try {
       const blob = await exportPng()
       const shareText = `${summary.judulHidup} — ${summary.epitaf}`
-      const file = blob ? new File([blob], `lifeflow-${caseNo}.png`, { type: 'image/png' }) : null
+      const file = blob ? new File([blob], `lifenode-${caseNo}.png`, { type: 'image/png' }) : null
       if (file && navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], text: shareText, title: 'Lifeflow' })
+        await navigator.share({ files: [file], text: shareText, title: 'Lifenode' })
       } else if (navigator.share) {
-        await navigator.share({ text: shareText, title: 'Lifeflow' })
+        await navigator.share({ text: shareText, title: 'Lifenode' })
       } else {
         await navigator.clipboard.writeText(shareText)
       }

@@ -1,4 +1,4 @@
-import type { Cabang, Edge, Graph, LifeNode, ValidationIssue } from './schema'
+import type { Cabang, Edge, Graph, Lane, LifeNode, ValidationIssue } from './schema'
 
 export class GraphCycleError extends Error {
   constructor() {
@@ -307,4 +307,50 @@ export function segmentCabang(
     })
   }
   return cabang
+}
+
+const LAYOUT_LANE_ORDER: Lane[] = ['karir', 'relasi', 'kesehatan', 'chaos']
+const LAYOUT_PX_PER_YEAR = 70
+const LAYOUT_ROW_HEIGHT = 150
+const LAYOUT_MARGIN_X = 60
+const LAYOUT_MARGIN_Y = 60
+// Floor for the gap between a node and any direct predecessor — without this,
+// a Merge feeding straight into End (zero years apart) lands on the exact
+// same X as its predecessor and the cards stack on top of each other.
+const LAYOUT_MIN_GAP_X = 260
+
+/**
+ * Swimlane layout: X follows age (reuses computeGraph's timing) but never
+ * closer to a direct predecessor than LAYOUT_MIN_GAP_X, so zero-duration
+ * hops (Merge straight into End, etc.) still get visibly separated. Y bands
+ * by lane; Start/Merge/End sit centered across the lane bands since they're
+ * not lane-specific. Throws GraphCycleError on an invalid graph — caller
+ * should only offer this once the graph passes validateGraph.
+ */
+export function autoLayout(graph: Graph, umurAwal: number): Record<string, { x: number; y: number }> {
+  const { timing, order } = computeGraph(graph, umurAwal)
+  const laneBandsHeight = LAYOUT_LANE_ORDER.length * LAYOUT_ROW_HEIGHT
+  const byId = new Map(graph.nodes.map((n) => [n.id, n]))
+  const incoming = new Map<string, Edge[]>()
+  for (const n of graph.nodes) incoming.set(n.id, [])
+  for (const e of graph.edges) incoming.get(e.to)?.push(e)
+
+  const x: Record<string, number> = {}
+  for (const id of order) {
+    const ageX = LAYOUT_MARGIN_X + (timing[id].umurMulai - umurAwal) * LAYOUT_PX_PER_YEAR
+    const preds = incoming.get(id) ?? []
+    const predecessorFloor = preds.length > 0 ? Math.max(...preds.map((e) => x[e.from] + LAYOUT_MIN_GAP_X)) : -Infinity
+    x[id] = Math.max(ageX, predecessorFloor)
+  }
+
+  const positions: Record<string, { x: number; y: number }> = {}
+  for (const n of graph.nodes) {
+    const lane = byId.get(n.id)?.lane
+    const y =
+      n.kind === 'aksi' && lane
+        ? LAYOUT_MARGIN_Y + LAYOUT_LANE_ORDER.indexOf(lane) * LAYOUT_ROW_HEIGHT
+        : LAYOUT_MARGIN_Y + laneBandsHeight / 2 - LAYOUT_ROW_HEIGHT / 2
+    positions[n.id] = { x: x[n.id], y }
+  }
+  return positions
 }
