@@ -57,6 +57,8 @@ export function DeletableEdge({
             value={conditionLabel ?? ''}
             placeholder="condition..."
             maxLength={60}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
             onChange={(e) => updateEdge(id, { label: e.target.value })}
           />
         </EdgeLabelRenderer>

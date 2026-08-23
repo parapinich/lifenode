@@ -41,13 +41,20 @@ export async function POST(req: Request) {
     if (e instanceof GraphCycleError) return NextResponse.json({ error: e.message }, { status: 400 })
     throw e
   }
+  if (!timing[ifNodeId]) {
+    return NextResponse.json({ error: `Unknown if node '${ifNodeId}'` }, { status: 400 })
+  }
 
-  const llmRequest = IfRequestSchema.parse({
+  const parsedRequest = IfRequestSchema.safeParse({
     ifNodeId,
     umurSaatIni: timing[ifNodeId].umurMulai,
     state,
     pilihan,
   })
+  if (!parsedRequest.success) {
+    return NextResponse.json({ error: 'Failed to build branch request', detail: parsedRequest.error.flatten() }, { status: 400 })
+  }
+  const llmRequest = parsedRequest.data
 
   try {
     const llmResponse = await callStructuredLLM(IF_SYSTEM_PROMPT, buildIfUserMessage(llmRequest), IfResponseSchema)

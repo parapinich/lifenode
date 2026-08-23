@@ -433,7 +433,13 @@ export function segmentCabang(
     )
     cabang.push({
       lane,
-      gapTahun: segment.umurSelesai - umurSelesaiTerakhir,
+      // ponytail: clamp ke 0 — kalau chainEndId nyasar ke sync point beda
+      // dari segment.syncEndId (mis. cabang if yang nggak nyatu balik di
+      // titik yang sama, di luar asumsi "cabang selalu ketemu di satu
+      // merge/if", lihat computeSegments), umurSelesaiTerakhir bisa keitung
+      // lebih besar dari segment.umurSelesai. Gap negatif nggak masuk akal
+      // dan bikin SegmentRequestSchema (min 0) nolak mentah-mentah.
+      gapTahun: Math.max(0, segment.umurSelesai - umurSelesaiTerakhir),
       nodes: laneNodes.map((n) => ({
         id: n.id,
         label: n.label ?? '',

@@ -57,12 +57,16 @@ export async function POST(req: Request) {
   const lamaSegmen = segment.umurSelesai - segment.umurMulai
   const kepadatan = hitungKepadatan(cabang, lamaSegmen)
 
-  const llmRequest = SegmentRequestSchema.parse({
+  const parsedRequest = SegmentRequestSchema.safeParse({
     segmen: { id: segment.id, umurMulai: segment.umurMulai, umurSelesai: segment.umurSelesai },
     state,
     cabang,
     kepadatan,
   })
+  if (!parsedRequest.success) {
+    return NextResponse.json({ error: 'Failed to build segment request', detail: parsedRequest.error.flatten() }, { status: 400 })
+  }
+  const llmRequest = parsedRequest.data
 
   try {
     const llmResponse = await callStructuredLLM(SYSTEM_PROMPT, buildSegmentUserMessage(llmRequest), SegmentResponseSchema)
