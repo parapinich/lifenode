@@ -41,6 +41,9 @@ yarn-error.log*
 /CLAUDE.md
 /PLAN.md
 
+# local Claude Code config — personal/local automation, not shared
+/.claude/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
