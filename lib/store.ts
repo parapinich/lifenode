@@ -25,10 +25,12 @@ interface GraphStore {
   updateNode: (id: string, patch: Partial<LifeNode>) => void
   removeNode: (id: string) => void
   addTungguNode: (x: number, y: number) => void
+  addIfNode: (x: number, y: number) => void
   addMergeNode: (x: number, y: number) => void
   moveNode: (id: string, x: number, y: number) => void
   beginNodeDrag: () => void
   addEdge: (from: string, to: string) => void
+  updateEdge: (id: string, patch: Partial<Edge>) => void
   removeEdge: (id: string) => void
   setKondisiAwal: (patch: Partial<KondisiAwal>) => void
   loadTemplate: () => void
@@ -107,6 +109,11 @@ export const useGraphStore = create<GraphStore>()(
           }))
         },
 
+        addIfNode: (x, y) => {
+          snapshot()
+          set((s) => ({ nodes: [...s.nodes, { id: newId('if'), kind: 'if', x, y } satisfies LifeNode] }))
+        },
+
         addMergeNode: (x, y) => {
           snapshot()
           set((s) => ({ nodes: [...s.nodes, { id: newId('merge'), kind: 'merge', x, y } satisfies LifeNode] }))
@@ -132,6 +139,9 @@ export const useGraphStore = create<GraphStore>()(
           snapshot()
           set((s) => ({ edges: [...s.edges, { id: newId('edge'), from, to }] }))
         },
+
+        updateEdge: (id, patch) =>
+          set((s) => ({ edges: s.edges.map((e) => (e.id === id ? { ...e, ...patch } : e)) })),
 
         removeEdge: (id) => {
           snapshot()

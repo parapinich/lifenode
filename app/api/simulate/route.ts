@@ -7,17 +7,15 @@ import {
   SegmentRequestSchema,
   SegmentResponseSchema,
 } from '@/lib/schema'
-import { computeGraph, segmentCabang, validateGraph, GraphCycleError } from '@/lib/graph'
+import { computeGraph, computeOneSegment, segmentCabang, validateGraph, GraphCycleError } from '@/lib/graph'
 import { hitungKepadatan } from '@/lib/engine'
 import { SYSTEM_PROMPT, buildSegmentUserMessage } from '@/lib/prompts'
 import { callStructuredLLM, LLMError } from '@/lib/llm'
 
-const MAX_SEGMEN = 6
-
 const RequestSchema = z.object({
   graph: GraphSchema,
   kondisiAwal: KondisiAwalSchema,
-  segmentIndex: z.number().int().min(0),
+  fromSyncId: z.string(),
   state: LifeStateSchema,
 })
 
@@ -27,31 +25,34 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid request', detail: parsed.error.flatten() }, { status: 400 })
   }
-  const { graph, kondisiAwal, segmentIndex, state } = parsed.data
+  const { graph, kondisiAwal, fromSyncId, state } = parsed.data
 
   // The server doesn't trust the client's math — recompute from the raw graph.
+  // validateGraph also enforces the worst-case 6-LLM-call budget (CLAUDE.md §5).
   const issues = validateGraph(graph)
   if (issues.length > 0) {
     return NextResponse.json({ error: 'Invalid graph', issues }, { status: 400 })
   }
 
-  let computation
+  let timing
   try {
-    computation = computeGraph(graph, kondisiAwal.umur)
+    timing = computeGraph(graph, kondisiAwal.umur).timing
   } catch (e) {
     if (e instanceof GraphCycleError) return NextResponse.json({ error: e.message }, { status: 400 })
     throw e
   }
 
-  const { segments, timing } = computation
-  if (segments.length > MAX_SEGMEN) {
-    return NextResponse.json({ error: `Maximum ${MAX_SEGMEN} segments per run` }, { status: 400 })
-  }
-  if (segmentIndex >= segments.length) {
-    return NextResponse.json({ error: 'segmentIndex out of range' }, { status: 400 })
+  if (!timing[fromSyncId]) {
+    return NextResponse.json({ error: `Unknown sync point '${fromSyncId}'` }, { status: 400 })
   }
 
-  const segment = segments[segmentIndex]
+  let segment
+  try {
+    segment = computeOneSegment(graph.nodes, graph.edges, timing, fromSyncId)
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Failed to compute segment' }, { status: 400 })
+  }
+
   const cabang = segmentCabang(segment, graph.nodes, graph.edges, timing)
   const lamaSegmen = segment.umurSelesai - segment.umurMulai
   const kepadatan = hitungKepadatan(cabang, lamaSegmen)

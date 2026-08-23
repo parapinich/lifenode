@@ -8,14 +8,15 @@ export function TungguNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
   const updateNode = useGraphStore((s) => s.updateNode)
   const removeNode = useGraphStore((s) => s.removeNode)
   const running = useRunStore((s) => s.running)
-  const hasIssue = data.issues.length > 0
+  const isSkipped = data.runStatus === 'skipped'
+  const hasIssue = data.issues.length > 0 && !isSkipped
 
   return (
     <div
       className={`group relative w-40 rounded-xl border border-dashed border-ink-soft bg-paper p-2.5 shadow-sm ${
         hasIssue ? 'outline outline-2 outline-stamp-red' : ''
-      }`}
-      title={data.issues.join('\n')}
+      } ${isSkipped ? 'opacity-40 grayscale' : ''}`}
+      title={isSkipped ? 'This branch was not taken' : data.issues.join('\n')}
     >
       <Handle type="target" position={Position.Left} className="!bg-ink-soft" />
 

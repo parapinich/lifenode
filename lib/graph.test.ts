@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { Edge, Graph, LifeNode } from './schema'
-import { GraphCycleError, autoLayout, computeGraph, segmentCabang, topologicalSort, validateGraph } from './graph'
+import {
+  GraphCycleError,
+  autoLayout,
+  computeGraph,
+  segmentCabang,
+  topologicalSort,
+  validateGraph,
+  worstCaseCallCount,
+} from './graph'
 
 function node(partial: Partial<LifeNode> & { id: string; kind: LifeNode['kind'] }): LifeNode {
   return { x: 0, y: 0, ...partial }
@@ -168,7 +176,7 @@ describe('validasi graf', () => {
     expect(issues).toContainEqual({ nodeId: 'nikah', pesan: "Node 'Nikah' isn't connected to start" })
   })
 
-  it('menolak lebih dari 5 merge', () => {
+  it('menolak lebih dari 5 merge (worst-case call budget kelampauan)', () => {
     const nodes: LifeNode[] = [node({ id: 'start', kind: 'start' })]
     const edges: Edge[] = []
     let prev = 'start'
@@ -183,6 +191,77 @@ describe('validasi graf', () => {
     nodes.push(node({ id: 'end', kind: 'end' }))
     edges.push(edge('eend', prev, 'end'))
     const issues = validateGraph({ nodes, edges })
-    expect(issues.some((i) => i.pesan.includes('Maximum 5 Merge'))).toBe(true)
+    expect(issues.some((i) => i.pesan.includes('LLM calls'))).toBe(true)
+  })
+})
+
+describe('node if', () => {
+  const graph: Graph = {
+    nodes: [
+      node({ id: 'start', kind: 'start' }),
+      node({ id: 'kerja', kind: 'aksi', lane: 'karir', label: 'Buka warung', intensity: 2 }),
+      node({ id: 'if1', kind: 'if' }),
+      node({ id: 'untung', kind: 'aksi', lane: 'karir', label: 'Buka cabang', intensity: 2 }),
+      node({ id: 'rugi', kind: 'aksi', lane: 'karir', label: 'Tutup warung', intensity: 3 }),
+      node({ id: 'end', kind: 'end' }),
+    ],
+    edges: [
+      edge('e1', 'start', 'kerja'),
+      edge('e2', 'kerja', 'if1'),
+      { id: 'e3', from: 'if1', to: 'untung', label: 'warungnya untung' },
+      { id: 'e4', from: 'if1', to: 'rugi', label: 'warungnya rugi' },
+      edge('e5', 'untung', 'end'),
+      edge('e6', 'rugi', 'end'),
+    ],
+  }
+
+  it('lolos validasi kalau tiap cabang if punya label', () => {
+    expect(validateGraph(graph)).toEqual([])
+  })
+
+  it('menolak cabang if tanpa label', () => {
+    const bad: Graph = {
+      ...graph,
+      edges: graph.edges.map((e) => (e.id === 'e4' ? { id: e.id, from: e.from, to: e.to } : e)),
+    }
+    const issues = validateGraph(bad)
+    expect(issues.some((i) => i.nodeId === 'if1' && i.pesan.includes('condition label'))).toBe(true)
+  })
+
+  it('menolak if dengan cuma 1 cabang keluar', () => {
+    const bad: Graph = { ...graph, edges: graph.edges.filter((e) => e.id !== 'e4') }
+    const issues = validateGraph(bad)
+    expect(issues.some((i) => i.nodeId === 'if1' && i.pesan.includes('at least 2'))).toBe(true)
+  })
+
+  it('timing if dan node abis if ngikutin jalur yang sama kayak node lain', () => {
+    const { timing } = computeGraph(graph, 20)
+    expect(timing.if1).toEqual({ umurMulai: 20, umurSelesai: 20 })
+    expect(timing.untung).toEqual({ umurMulai: 20, umurSelesai: 20 })
+  })
+})
+
+describe('worstCaseCallCount', () => {
+  it('if berbobot 2 (decision call + segmen abis cabang), merge berbobot 1', () => {
+    const graph: Graph = {
+      nodes: [
+        node({ id: 'start', kind: 'start' }),
+        node({ id: 'if1', kind: 'if' }),
+        node({ id: 'merge1', kind: 'merge' }),
+        node({ id: 'a', kind: 'aksi', lane: 'chaos', label: 'a', intensity: 1 }),
+        node({ id: 'b', kind: 'aksi', lane: 'chaos', label: 'b', intensity: 1 }),
+        node({ id: 'end', kind: 'end' }),
+      ],
+      edges: [
+        edge('e1', 'start', 'if1'),
+        { id: 'e2', from: 'if1', to: 'a', label: 'ya' },
+        { id: 'e3', from: 'if1', to: 'b', label: 'nggak' },
+        edge('e4', 'a', 'merge1'),
+        edge('e5', 'b', 'merge1'),
+        edge('e6', 'merge1', 'end'),
+      ],
+    }
+    // 1 baseline segmen + if(2) + merge(1) = 4
+    expect(worstCaseCallCount(graph)).toBe(4)
   })
 })

@@ -3,7 +3,7 @@ import { z } from 'zod'
 export const LANES = ['karir', 'relasi', 'kesehatan', 'chaos'] as const
 export type Lane = (typeof LANES)[number]
 
-export const NODE_KINDS = ['start', 'aksi', 'tunggu', 'merge', 'end'] as const
+export const NODE_KINDS = ['start', 'aksi', 'tunggu', 'merge', 'if', 'end'] as const
 export type NodeKind = (typeof NODE_KINDS)[number]
 
 export const STATUS_NODE = ['sukses', 'separuh', 'gagal'] as const
@@ -45,6 +45,11 @@ export const EdgeSchema = z.object({
   id: z.string(),
   from: z.string(),
   to: z.string(),
+  // Wajib diisi kalau `from` adalah node 'if' — kondisi teks bebas per cabang.
+  // Nggak divalidasi di sini karena Zod nggak lihat kind node lain; dicek di
+  // validateGraph (lib/graph.ts), sama kayak cross-check lain yang butuh
+  // konteks graf penuh.
+  label: z.string().max(60).optional(),
 })
 export type Edge = z.infer<typeof EdgeSchema>
 
@@ -113,6 +118,22 @@ export const SegmentResponseSchema = z.object({
   kejadianPenting: z.array(z.string()).max(2),
 })
 export type SegmentResponse = z.infer<typeof SegmentResponseSchema>
+
+// --- Kontrak LLM: keputusan cabang di node If ---
+
+export const IfRequestSchema = z.object({
+  ifNodeId: z.string(),
+  umurSaatIni: z.number(),
+  state: LifeStateSchema,
+  pilihan: z.array(z.object({ edgeId: z.string(), label: z.string() })).min(2),
+})
+export type IfRequest = z.infer<typeof IfRequestSchema>
+
+export const IfResponseSchema = z.object({
+  edgeId: z.string(),
+  narasi: z.string(),
+})
+export type IfResponse = z.infer<typeof IfResponseSchema>
 
 // --- Graf mentah yang dikirim client -> server ---
 

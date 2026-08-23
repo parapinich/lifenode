@@ -22,12 +22,20 @@ import { StartNode } from './nodes/StartNode'
 import { AksiNode } from './nodes/AksiNode'
 import { TungguNode } from './nodes/TungguNode'
 import { MergeNode } from './nodes/MergeNode'
+import { IfNode } from './nodes/IfNode'
 import { EndNode } from './nodes/EndNode'
 import { DeletableEdge } from './edges/DeletableEdge'
 import type { LifeFlowNodeData } from './nodes/shared'
 import type { PaletteDragPayload } from './NodePalette'
 
-const nodeTypes = { start: StartNode, aksi: AksiNode, tunggu: TungguNode, merge: MergeNode, end: EndNode }
+const nodeTypes = {
+  start: StartNode,
+  aksi: AksiNode,
+  tunggu: TungguNode,
+  merge: MergeNode,
+  if: IfNode,
+  end: EndNode,
+}
 const edgeTypes = { deletable: DeletableEdge }
 
 export function Board() {
@@ -39,6 +47,7 @@ export function Board() {
   const addEdgeToStore = useGraphStore((s) => s.addEdge)
   const addAksiNode = useGraphStore((s) => s.addAksiNode)
   const addTungguNode = useGraphStore((s) => s.addTungguNode)
+  const addIfNode = useGraphStore((s) => s.addIfNode)
   const addMergeNode = useGraphStore((s) => s.addMergeNode)
   const removeNode = useGraphStore((s) => s.removeNode)
   const nodeStatus = useRunStore((s) => s.nodeStatus)
@@ -93,15 +102,19 @@ export function Board() {
 
   const [selectedEdgeIds, setSelectedEdgeIds] = useState<Set<string>>(new Set())
 
+  const nodeById = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes])
+
   const rfEdges: Edge[] = useMemo(
     () =>
       edges.map((e) => {
         const toStatus = nodeStatus[e.to]
         const fromStatus = nodeStatus[e.from]
+        const skipped = toStatus === 'skipped' || fromStatus === 'skipped'
         // Sync nodes (start/merge/end) never get their own runStatus — an edge
         // into one of them reads as "completed" once its source settled.
-        const active = toStatus === 'loading'
-        const completed = !active && (isTerminalStatus(toStatus) || isTerminalStatus(fromStatus))
+        const active = !skipped && toStatus === 'loading'
+        const completed = !skipped && !active && (isTerminalStatus(toStatus) || isTerminalStatus(fromStatus))
+        const isIfEdge = nodeById.get(e.from)?.kind === 'if'
         return {
           id: e.id,
           source: e.from,
@@ -109,10 +122,10 @@ export function Board() {
           type: 'deletable',
           selected: selectedEdgeIds.has(e.id),
           animated: active,
-          data: { completed },
+          data: { completed, skipped, isIfEdge, conditionLabel: e.label },
         }
       }),
-    [edges, selectedEdgeIds, nodeStatus]
+    [edges, selectedEdgeIds, nodeStatus, nodeById]
   )
 
   const onEdgesChange = useCallback((changes: EdgeChange[]) => {
@@ -167,9 +180,10 @@ export function Board() {
       const pos = screenToFlowPosition({ x: event.clientX, y: event.clientY })
       if (payload.type === 'aksi') addAksiNode(payload.lane, payload.label, pos.x, pos.y)
       else if (payload.type === 'tunggu') addTungguNode(pos.x, pos.y)
+      else if (payload.type === 'if') addIfNode(pos.x, pos.y)
       else addMergeNode(pos.x, pos.y)
     },
-    [running, screenToFlowPosition, addAksiNode, addTungguNode, addMergeNode]
+    [running, screenToFlowPosition, addAksiNode, addTungguNode, addIfNode, addMergeNode]
   )
 
   return (

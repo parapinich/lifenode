@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { LifeState, RingkasanResponse, StatusNode } from './schema'
 
-export type NodeRunStatus = 'idle' | 'loading' | StatusNode
+export type NodeRunStatus = 'idle' | 'loading' | StatusNode | 'skipped'
 
 const TERMINAL_STATUSES = new Set<NodeRunStatus>(['sukses', 'separuh', 'gagal'])
 export function isTerminalStatus(status: NodeRunStatus | undefined): boolean {

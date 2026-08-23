@@ -36,28 +36,54 @@ export function topologicalSort(nodes: LifeNode[], edges: Edge[]): string[] {
   return order
 }
 
+// Hard limit CLAUDE.md §5: max 5 Merge -> max 6 LLM call per run (excludes the
+// separate summary call). A Merge costs 1 call (the segment starting there);
+// an If costs 2 (its own branch-decision call, plus the segment starting at
+// whichever branch gets chosen). Validated from the graph's WORST-CASE path —
+// server never trusts which branch the LLM will actually pick at runtime.
+export const MAX_LLM_CALLS = 6
+
+export function worstCaseCallCount(graph: Graph): number {
+  const { nodes, edges } = graph
+  const order = topologicalSort(nodes, edges)
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  const incoming = new Map<string, Edge[]>()
+  for (const n of nodes) incoming.set(n.id, [])
+  for (const e of edges) incoming.get(e.to)?.push(e)
+
+  const pathCost: Record<string, number> = {}
+  for (const id of order) {
+    const node = byId.get(id)!
+    const own = node.kind === 'if' ? 2 : node.kind === 'merge' ? 1 : 0
+    const inEdges = incoming.get(id) ?? []
+    const maxPred = inEdges.length > 0 ? Math.max(...inEdges.map((e) => pathCost[e.from] ?? 0)) : 0
+    pathCost[id] = own + maxPred
+  }
+
+  const end = nodes.find((n) => n.kind === 'end')
+  return (end ? pathCost[end.id] : 0) + 1
+}
+
 export function validateGraph(graph: Graph): ValidationIssue[] {
   const { nodes, edges } = graph
   const issues: ValidationIssue[] = []
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const incoming = new Map<string, Edge[]>()
-  const outgoingCount = new Map<string, number>()
+  const outgoingEdges = new Map<string, Edge[]>()
   for (const n of nodes) {
     incoming.set(n.id, [])
-    outgoingCount.set(n.id, 0)
+    outgoingEdges.set(n.id, [])
   }
   for (const e of edges) {
     if (!byId.has(e.from) || !byId.has(e.to)) continue
     incoming.get(e.to)?.push(e)
-    outgoingCount.set(e.from, (outgoingCount.get(e.from) ?? 0) + 1)
+    outgoingEdges.get(e.from)?.push(e)
   }
 
   const starts = nodes.filter((n) => n.kind === 'start')
   const ends = nodes.filter((n) => n.kind === 'end')
-  const merges = nodes.filter((n) => n.kind === 'merge')
   if (starts.length !== 1) issues.push({ nodeId: '', pesan: `Graph needs exactly one start node, found ${starts.length}` })
   if (ends.length !== 1) issues.push({ nodeId: '', pesan: `Graph needs exactly one end node, found ${ends.length}` })
-  if (merges.length > 5) issues.push({ nodeId: '', pesan: `Maximum 5 Merge nodes per graph, found ${merges.length}` })
 
   for (const n of nodes) {
     const label = n.label ?? n.id
@@ -72,8 +98,20 @@ export function validateGraph(graph: Graph): ValidationIssue[] {
       if ((incoming.get(n.id)?.length ?? 0) !== 1) {
         issues.push({ nodeId: n.id, pesan: `Wait node '${label}' needs exactly 1 incoming connection` })
       }
-      if ((outgoingCount.get(n.id) ?? 0) !== 1) {
+      if ((outgoingEdges.get(n.id)?.length ?? 0) !== 1) {
         issues.push({ nodeId: n.id, pesan: `Wait node '${label}' needs exactly 1 outgoing connection` })
+      }
+    }
+    if (n.kind === 'if') {
+      const outs = outgoingEdges.get(n.id) ?? []
+      if ((incoming.get(n.id)?.length ?? 0) !== 1) {
+        issues.push({ nodeId: n.id, pesan: `If node '${label}' needs exactly 1 incoming connection` })
+      }
+      if (outs.length < 2) {
+        issues.push({ nodeId: n.id, pesan: `If node '${label}' needs at least 2 outgoing branches` })
+      }
+      if (outs.some((e) => !e.label)) {
+        issues.push({ nodeId: n.id, pesan: `Every branch out of If node '${label}' needs a condition label` })
       }
     }
   }
@@ -83,6 +121,16 @@ export function validateGraph(graph: Graph): ValidationIssue[] {
     order = topologicalSort(nodes, edges)
   } catch {
     issues.push({ nodeId: '', pesan: 'Graph contains a cycle' })
+  }
+
+  if (order && starts.length === 1 && ends.length === 1) {
+    const worst = worstCaseCallCount(graph)
+    if (worst > MAX_LLM_CALLS) {
+      issues.push({
+        nodeId: '',
+        pesan: `Graph's worst-case path needs up to ${worst} LLM calls, but the limit is ${MAX_LLM_CALLS} per run`,
+      })
+    }
   }
 
   if (order && starts.length === 1) {
@@ -210,11 +258,65 @@ export function computeGraph(graph: Graph, umurAwal: number): GraphComputation {
 }
 
 /**
- * Kelompokin node aksi ke segmen berdasarkan sync point (start/merge) terdekat
- * di belakangnya. ponytail: kalau satu node aksi bercabang ke dua merge yang
- * beda sebelum ada merge lain di antaranya, segmen ditentukan dari sync point
- * paling awal yang ditemukan pas nodes-nya diproses — kasus itu di luar
- * cakupan MVP (lihat CLAUDE.md §2, cabang selalu ketemu lagi di satu Merge).
+ * Versi single-hop dari computeSegments: jalan dari SATU sync point (start,
+ * merge, atau if yang cabangnya udah kepilih), kumpulin node aksi sampe
+ * ketemu sync point berikutnya. Dipakai runExecute.ts buat eksekusi
+ * inkremental — beda dari computeSegments yang hitung seluruh graf statis di
+ * depan, ini nunggu tiap keputusan if baru jalan ke langkah berikutnya.
+ * Caller yang nentuin `edges` mana yang boleh dilewati (buat node if, cabang
+ * yang nggak kepilih harus difilter keluar dulu sebelum manggil ini).
+ */
+export function computeOneSegment(
+  nodes: LifeNode[],
+  edges: Edge[],
+  timing: Record<string, NodeTiming>,
+  fromSyncId: string
+): Segment {
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  const outgoing = new Map<string, Edge[]>()
+  for (const n of nodes) outgoing.set(n.id, [])
+  for (const e of edges) outgoing.get(e.from)?.push(e)
+
+  const nodeIds: string[] = []
+  let syncEndId: string | undefined
+  const seen = new Set<string>()
+  const stack = (outgoing.get(fromSyncId) ?? []).map((e) => e.to)
+  while (stack.length > 0) {
+    const id = stack.pop()!
+    if (seen.has(id)) continue
+    seen.add(id)
+    const node = byId.get(id)!
+    if (node.kind === 'merge' || node.kind === 'if' || node.kind === 'end') {
+      syncEndId = id
+      continue
+    }
+    if (node.kind === 'aksi') nodeIds.push(id)
+    for (const e of outgoing.get(id) ?? []) stack.push(e.to)
+  }
+
+  if (!syncEndId) throw new Error(`No sync point reachable from '${fromSyncId}'`)
+
+  return {
+    id: `seg:${fromSyncId}`,
+    syncStartId: fromSyncId,
+    syncEndId,
+    umurMulai: timing[fromSyncId].umurSelesai,
+    umurSelesai: timing[syncEndId].umurMulai,
+    nodeIds,
+  }
+}
+
+/**
+ * Kelompokin node aksi ke segmen berdasarkan sync point (start/merge/if)
+ * terdekat di belakangnya. Ini buat preview statis doang (age di canvas,
+ * autoLayout) — eksekusi beneran pakai computeOneSegment yang jalan
+ * inkremental, soalnya cabang mana yang diambil di node if baru ketauan pas
+ * runtime. ponytail: kalau satu node aksi/if bercabang ke dua sync point yang
+ * beda sebelum ada sync point lain di antaranya, segmen preview ditentukan
+ * dari sync point paling awal yang ditemukan pas nodes-nya diproses — kasus
+ * itu di luar cakupan MVP (lihat CLAUDE.md §2, cabang selalu ketemu lagi di
+ * satu Merge; sama-sama berlaku buat If, tiap cabangnya diasumsikan nyatu
+ * balik di satu sync point yang sama).
  */
 function computeSegments(
   nodes: LifeNode[],
@@ -231,7 +333,7 @@ function computeSegments(
     const cached = segmentStartCache.get(nodeId)
     if (cached) return cached
     const node = byId.get(nodeId)!
-    if (node.kind === 'start' || node.kind === 'merge') {
+    if (node.kind === 'start' || node.kind === 'merge' || node.kind === 'if') {
       segmentStartCache.set(nodeId, nodeId)
       return nodeId
     }
@@ -253,7 +355,7 @@ function computeSegments(
     for (const e of edges) {
       if (e.from !== n.id) continue
       const target = byId.get(e.to)!
-      if (target.kind === 'merge' || target.kind === 'end') {
+      if (target.kind === 'merge' || target.kind === 'if' || target.kind === 'end') {
         syncEndByStart.set(start, target.id)
       }
     }
@@ -264,7 +366,7 @@ function computeSegments(
     for (const e of edges) {
       if (e.from !== n.id) continue
       const target = byId.get(e.to)!
-      if (target.kind === 'merge' || target.kind === 'end') {
+      if (target.kind === 'merge' || target.kind === 'if' || target.kind === 'end') {
         syncEndByStart.set(n.id, target.id)
       }
     }

@@ -12,7 +12,8 @@ export function AksiNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
   const running = useRunStore((s) => s.running)
   const lane = data.lane ?? 'chaos'
   const style = LANE_STYLE[lane]
-  const hasIssue = data.issues.length > 0
+  const isSkipped = data.runStatus === 'skipped'
+  const hasIssue = data.issues.length > 0 && !isSkipped
   const isLoading = data.runStatus === 'loading'
   const isDone = data.runStatus === 'sukses' || data.runStatus === 'separuh' || data.runStatus === 'gagal'
 
@@ -20,8 +21,8 @@ export function AksiNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
     <div
       className={`group relative w-60 rounded-xl border border-l-4 ${style.border} bg-paper-raised p-3 shadow-sm ${
         hasIssue ? 'outline outline-2 outline-stamp-red' : ''
-      } ${isLoading ? 'animate-pulse' : ''}`}
-      title={[...data.issues, data.runStatus === 'gagal' ? 'This step failed' : ''].filter(Boolean).join('\n')}
+      } ${isLoading ? 'animate-pulse' : ''} ${isSkipped ? 'opacity-40 grayscale' : ''}`}
+      title={[...data.issues, data.runStatus === 'gagal' ? 'This step failed' : '', isSkipped ? 'This branch was not taken' : ''].filter(Boolean).join('\n')}
     >
       <Handle type="target" position={Position.Left} className="!bg-ink-soft" />
 
