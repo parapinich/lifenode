@@ -3,7 +3,7 @@ import { z } from 'zod'
 export const LANES = ['karir', 'relasi', 'kesehatan', 'chaos'] as const
 export type Lane = (typeof LANES)[number]
 
-export const NODE_KINDS = ['start', 'aksi', 'merge', 'end'] as const
+export const NODE_KINDS = ['start', 'aksi', 'tunggu', 'merge', 'end'] as const
 export type NodeKind = (typeof NODE_KINDS)[number]
 
 export const STATUS_NODE = ['sukses', 'separuh', 'gagal'] as const
@@ -25,8 +25,9 @@ export const LifeNodeSchema = z
     if (node.kind === 'aksi') {
       if (!node.lane) ctx.addIssue({ code: 'custom', message: "node 'aksi' wajib punya lane" })
       if (!node.label) ctx.addIssue({ code: 'custom', message: "node 'aksi' wajib punya label" })
-      if (node.durasi === undefined)
-        ctx.addIssue({ code: 'custom', message: "node 'aksi' wajib punya durasi" })
+    }
+    if (node.kind === 'tunggu' && node.durasi === undefined) {
+      ctx.addIssue({ code: 'custom', message: "node 'tunggu' wajib punya durasi" })
     }
   })
 export type LifeNode = z.infer<typeof LifeNodeSchema>

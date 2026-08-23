@@ -52,7 +52,7 @@ export async function POST(req: Request) {
   }
 
   const segment = segments[segmentIndex]
-  const cabang = segmentCabang(segment, graph.nodes, timing)
+  const cabang = segmentCabang(segment, graph.nodes, graph.edges, timing)
   const lamaSegmen = segment.umurSelesai - segment.umurMulai
   const kepadatan = hitungKepadatan(cabang, lamaSegmen)
 

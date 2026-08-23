@@ -65,8 +65,16 @@ export function validateGraph(graph: Graph): ValidationIssue[] {
       issues.push({ nodeId: n.id, pesan: `Node '${label}' needs at least 2 incoming connections to be a Merge` })
     }
     if (n.kind === 'aksi') {
-      if (!n.durasi) issues.push({ nodeId: n.id, pesan: `Node '${label}' is missing a duration` })
       if (!n.label) issues.push({ nodeId: n.id, pesan: `Step node '${n.id}' is missing a label` })
+    }
+    if (n.kind === 'tunggu') {
+      if (!n.durasi) issues.push({ nodeId: n.id, pesan: `Wait node '${n.id}' is missing a duration` })
+      if ((incoming.get(n.id)?.length ?? 0) !== 1) {
+        issues.push({ nodeId: n.id, pesan: `Wait node '${label}' needs exactly 1 incoming connection` })
+      }
+      if ((outgoingCount.get(n.id) ?? 0) !== 1) {
+        issues.push({ nodeId: n.id, pesan: `Wait node '${label}' needs exactly 1 outgoing connection` })
+      }
     }
   }
 
@@ -189,9 +197,10 @@ export function computeGraph(graph: Graph, umurAwal: number): GraphComputation {
         gaps.push({ mergeId: id, fromNodeId: e.from, gapTahun: umurMulai - timing[e.from].umurSelesai })
       }
     } else {
-      // aksi / end: tepat satu kabel masuk (graf sudah divalidasi)
+      // aksi / tunggu / end: tepat satu kabel masuk (graf sudah divalidasi).
+      // aksi selalu instan (durasi 0) — durasi cuma lewat node tunggu.
       const umurMulai = timing[inEdges[0].from].umurSelesai
-      const durasi = node.kind === 'aksi' ? (node.durasi ?? 0) : 0
+      const durasi = node.kind === 'tunggu' ? (node.durasi ?? 0) : 0
       timing[id] = { umurMulai, umurSelesai: umurMulai + durasi }
     }
   }
@@ -276,13 +285,36 @@ function computeSegments(
   return segments
 }
 
+/**
+ * Node aksi jalur ini raw ke node id di ujung rantai `tunggu` yang nempel
+ * langsung setelahnya (aksi durasinya selalu 0, jadi durasi cabang yang keliatan
+ * di gapTahun harus ngikutin node tunggu-nya, bukan cuma aksi-nya doang).
+ * Berhenti begitu ketemu percabangan lain (>1 kabel keluar) atau node bukan tunggu.
+ */
+function chainEndId(nodeId: string, byId: Map<string, LifeNode>, outgoing: Map<string, Edge[]>): string {
+  let current = nodeId
+  while (true) {
+    const outs = outgoing.get(current) ?? []
+    if (outs.length !== 1) return current
+    const next = byId.get(outs[0].to)
+    if (!next || next.kind !== 'tunggu') return current
+    current = next.id
+  }
+}
+
 /** Kelompokin node aksi di satu segmen jadi payload `cabang` buat kontrak LLM (CLAUDE.md §7). */
 export function segmentCabang(
   segment: Segment,
   nodes: LifeNode[],
+  edges: Edge[],
   timing: Record<string, NodeTiming>
 ): Cabang[] {
   const byId = new Map(nodes.map((n) => [n.id, n]))
+  const outgoing = new Map<string, Edge[]>()
+  for (const e of edges) {
+    if (!outgoing.has(e.from)) outgoing.set(e.from, [])
+    outgoing.get(e.from)!.push(e)
+  }
   const byLane = new Map<NonNullable<LifeNode['lane']>, LifeNode[]>()
   for (const id of segment.nodeIds) {
     const n = byId.get(id)!
@@ -294,7 +326,9 @@ export function segmentCabang(
   const cabang: Cabang[] = []
   for (const [lane, laneNodes] of byLane) {
     laneNodes.sort((a, b) => timing[a.id].umurMulai - timing[b.id].umurMulai)
-    const umurSelesaiTerakhir = Math.max(...laneNodes.map((n) => timing[n.id].umurSelesai))
+    const umurSelesaiTerakhir = Math.max(
+      ...laneNodes.map((n) => timing[chainEndId(n.id, byId, outgoing)].umurSelesai)
+    )
     cabang.push({
       lane,
       gapTahun: segment.umurSelesai - umurSelesaiTerakhir,

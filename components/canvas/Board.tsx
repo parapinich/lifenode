@@ -20,13 +20,14 @@ import { useRunStore, isTerminalStatus } from '@/lib/runStore'
 import { computeGraph, validateGraph } from '@/lib/graph'
 import { StartNode } from './nodes/StartNode'
 import { AksiNode } from './nodes/AksiNode'
+import { TungguNode } from './nodes/TungguNode'
 import { MergeNode } from './nodes/MergeNode'
 import { EndNode } from './nodes/EndNode'
 import { DeletableEdge } from './edges/DeletableEdge'
 import type { LifeFlowNodeData } from './nodes/shared'
 import type { PaletteDragPayload } from './NodePalette'
 
-const nodeTypes = { start: StartNode, aksi: AksiNode, merge: MergeNode, end: EndNode }
+const nodeTypes = { start: StartNode, aksi: AksiNode, tunggu: TungguNode, merge: MergeNode, end: EndNode }
 const edgeTypes = { deletable: DeletableEdge }
 
 export function Board() {
@@ -37,6 +38,7 @@ export function Board() {
   const beginNodeDrag = useGraphStore((s) => s.beginNodeDrag)
   const addEdgeToStore = useGraphStore((s) => s.addEdge)
   const addAksiNode = useGraphStore((s) => s.addAksiNode)
+  const addTungguNode = useGraphStore((s) => s.addTungguNode)
   const addMergeNode = useGraphStore((s) => s.addMergeNode)
   const removeNode = useGraphStore((s) => s.removeNode)
   const nodeStatus = useRunStore((s) => s.nodeStatus)
@@ -164,9 +166,10 @@ export function Board() {
       const payload: PaletteDragPayload = JSON.parse(raw)
       const pos = screenToFlowPosition({ x: event.clientX, y: event.clientY })
       if (payload.type === 'aksi') addAksiNode(payload.lane, payload.label, pos.x, pos.y)
+      else if (payload.type === 'tunggu') addTungguNode(pos.x, pos.y)
       else addMergeNode(pos.x, pos.y)
     },
-    [running, screenToFlowPosition, addAksiNode, addMergeNode]
+    [running, screenToFlowPosition, addAksiNode, addTungguNode, addMergeNode]
   )
 
   return (

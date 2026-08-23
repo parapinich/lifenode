@@ -1,4 +1,4 @@
-import { GitMerge } from 'lucide-react'
+import { GitMerge, Hourglass } from 'lucide-react'
 import { useRunStore } from '@/lib/runStore'
 import type { Lane } from '@/lib/schema'
 import { LANE_LABEL, LANE_STYLE } from './nodes/shared'
@@ -10,7 +10,7 @@ const PRESETS: Record<Lane, string[]> = {
   chaos: ['Join an MLM', 'Gamble on crypto', 'Adopt 10 cats'],
 }
 
-export type PaletteDragPayload = { type: 'aksi'; lane: Lane; label: string } | { type: 'merge' }
+export type PaletteDragPayload = { type: 'aksi'; lane: Lane; label: string } | { type: 'tunggu' } | { type: 'merge' }
 
 function onDragStart(e: React.DragEvent, payload: PaletteDragPayload) {
   e.dataTransfer.setData('application/lifenode-node', JSON.stringify(payload))
@@ -56,6 +56,19 @@ export function NodePalette() {
       })}
 
       <div className="mb-1 mt-5 font-mono text-[10px] font-semibold uppercase tracking-wider text-ink-soft">
+        Time
+      </div>
+      <div
+        draggable={!running}
+        onDragStart={(e) => onDragStart(e, { type: 'tunggu' })}
+        className={`mb-4 flex items-center gap-1.5 rounded-lg border border-dashed border-ink-soft bg-paper px-3 py-1.5 font-mono text-xs text-ink-soft ${
+          running ? 'cursor-not-allowed opacity-40' : 'cursor-grab'
+        }`}
+      >
+        <Hourglass size={13} /> Wait
+      </div>
+
+      <div className="mb-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-ink-soft">
         Sync point
       </div>
       <div

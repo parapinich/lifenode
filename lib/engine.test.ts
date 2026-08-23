@@ -35,6 +35,16 @@ describe('hitungKepadatan', () => {
   it('overload kalau intensity tinggi dan segmen pendek', () => {
     expect(hitungKepadatan([cabang('karir', 3), cabang('relasi', 3)], 2)).toBe(3)
   })
+
+  it('segmen 0 tahun (aksi tanpa node tunggu) dipatok ke sentinel finite, bukan Infinity', () => {
+    const kepadatan = hitungKepadatan([cabang('chaos', 3)], 0)
+    expect(kepadatan).toBeGreaterThan(1.2)
+    expect(Number.isFinite(kepadatan)).toBe(true)
+  })
+
+  it('segmen 0 tahun tanpa node sama sekali tetep 0, bukan sentinel', () => {
+    expect(hitungKepadatan([], 0)).toBe(0)
+  })
 })
 
 describe('applyDelta', () => {

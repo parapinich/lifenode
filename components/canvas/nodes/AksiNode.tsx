@@ -61,17 +61,6 @@ export function AksiNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
             </option>
           ))}
         </select>
-
-        <input
-          type="number"
-          min={1}
-          max={15}
-          className="nodrag w-12 rounded-md border border-line bg-transparent px-1 font-mono text-[11px] text-ink disabled:opacity-70"
-          value={data.durasi ?? 1}
-          disabled={running}
-          onChange={(e) => updateNode(id, { durasi: Number(e.target.value) })}
-        />
-        <span className="font-mono text-[10px] text-ink-soft">yrs</span>
       </div>
 
       <textarea

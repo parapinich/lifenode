@@ -24,6 +24,7 @@ interface GraphStore {
   addAksiNode: (lane: Lane, label: string, x: number, y: number) => void
   updateNode: (id: string, patch: Partial<LifeNode>) => void
   removeNode: (id: string) => void
+  addTungguNode: (x: number, y: number) => void
   addMergeNode: (x: number, y: number) => void
   moveNode: (id: string, x: number, y: number) => void
   beginNodeDrag: () => void
@@ -42,19 +43,25 @@ const endNode: LifeNode = { id: 'end', kind: 'end', x: 720, y: 200 }
 const TEMPLATE_KONDISI: KondisiAwal = { umur: 20, uang: 2_000_000, latarBelakang: 'fresh out of college' }
 const TEMPLATE_NODES: LifeNode[] = [
   { id: 'start', kind: 'start', x: 0, y: 0 },
-  { id: 't-karir', kind: 'aksi', x: 0, y: 0, lane: 'karir', label: 'Take an office job', durasi: 5, intensity: 2 },
-  { id: 't-relasi', kind: 'aksi', x: 0, y: 0, lane: 'relasi', label: 'Start dating', durasi: 2, intensity: 2 },
-  { id: 't-chaos', kind: 'aksi', x: 0, y: 0, lane: 'chaos', label: 'Join an MLM', durasi: 1, intensity: 3 },
+  { id: 't-karir', kind: 'aksi', x: 0, y: 0, lane: 'karir', label: 'Take an office job', intensity: 2 },
+  { id: 't-karir-wait', kind: 'tunggu', x: 0, y: 0, durasi: 5 },
+  { id: 't-relasi', kind: 'aksi', x: 0, y: 0, lane: 'relasi', label: 'Start dating', intensity: 2 },
+  { id: 't-relasi-wait', kind: 'tunggu', x: 0, y: 0, durasi: 2 },
+  { id: 't-chaos', kind: 'aksi', x: 0, y: 0, lane: 'chaos', label: 'Join an MLM', intensity: 3 },
+  { id: 't-chaos-wait', kind: 'tunggu', x: 0, y: 0, durasi: 1 },
   { id: 't-merge', kind: 'merge', x: 0, y: 0 },
   { id: 'end', kind: 'end', x: 0, y: 0 },
 ]
 const TEMPLATE_EDGES: Edge[] = [
   { id: 'te1', from: 'start', to: 't-karir' },
+  { id: 'te1w', from: 't-karir', to: 't-karir-wait' },
   { id: 'te2', from: 'start', to: 't-relasi' },
+  { id: 'te2w', from: 't-relasi', to: 't-relasi-wait' },
   { id: 'te3', from: 'start', to: 't-chaos' },
-  { id: 'te4', from: 't-karir', to: 't-merge' },
-  { id: 'te5', from: 't-relasi', to: 't-merge' },
-  { id: 'te6', from: 't-chaos', to: 't-merge' },
+  { id: 'te3w', from: 't-chaos', to: 't-chaos-wait' },
+  { id: 'te4', from: 't-karir-wait', to: 't-merge' },
+  { id: 'te5', from: 't-relasi-wait', to: 't-merge' },
+  { id: 'te6', from: 't-chaos-wait', to: 't-merge' },
   { id: 'te7', from: 't-merge', to: 'end' },
 ]
 
@@ -88,8 +95,15 @@ export const useGraphStore = create<GraphStore>()(
           set((s) => ({
             nodes: [
               ...s.nodes,
-              { id: newId('aksi'), kind: 'aksi', x, y, lane, label, durasi: 1, intensity: 1 } satisfies LifeNode,
+              { id: newId('aksi'), kind: 'aksi', x, y, lane, label, intensity: 1 } satisfies LifeNode,
             ],
+          }))
+        },
+
+        addTungguNode: (x, y) => {
+          snapshot()
+          set((s) => ({
+            nodes: [...s.nodes, { id: newId('tunggu'), kind: 'tunggu', x, y, durasi: 1 } satisfies LifeNode],
           }))
         },
 
