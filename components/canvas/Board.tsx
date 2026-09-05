@@ -1,7 +1,8 @@
 'use client'
 
 import '@xyflow/react/dist/style.css'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useLocaleStore } from '@/lib/locale'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -39,6 +40,7 @@ const nodeTypes = {
 const edgeTypes = { deletable: DeletableEdge }
 
 export function Board() {
+  const language = useLocaleStore((s) => s.language)
   const nodes = useGraphStore((s) => s.nodes)
   const edges = useGraphStore((s) => s.edges)
   const kondisiAwal = useGraphStore((s) => s.kondisiAwal)
@@ -54,6 +56,20 @@ export function Board() {
   const running = useRunStore((s) => s.running)
   const layoutVersion = useGraphStore((s) => s.layoutVersion)
   const { screenToFlowPosition, fitView } = useReactFlow()
+  const boardRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    let previousWidth: number | undefined
+    const observer = new ResizeObserver(([entry]) => {
+      const width = entry.contentRect.width
+      if (previousWidth !== undefined && width !== previousWidth) {
+        void fitView({ padding: 0.2, maxZoom: 1 })
+      }
+      previousWidth = width
+    })
+    if (boardRef.current) observer.observe(boardRef.current)
+    return () => observer.disconnect()
+  }, [fitView])
 
   useEffect(() => {
     if (layoutVersion === 0) return
@@ -61,7 +77,7 @@ export function Board() {
     return () => cancelAnimationFrame(id)
   }, [layoutVersion, fitView])
 
-  const issues = useMemo(() => validateGraph({ nodes, edges }), [nodes, edges])
+  const issues = useMemo(() => validateGraph({ nodes, edges }, language), [nodes, edges, language])
   const issuesByNode = useMemo(() => {
     const map = new Map<string, string[]>()
     for (const issue of issues) {
@@ -187,8 +203,9 @@ export function Board() {
   )
 
   return (
-    <div className="flex-1" onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
+    <div ref={boardRef} className="life-board" onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
       <ReactFlow
+        ariaLabelConfig={language === 'id' ? { 'controls.zoomIn.ariaLabel': 'Perbesar', 'controls.zoomOut.ariaLabel': 'Perkecil', 'controls.fitView.ariaLabel': 'Tampilkan seluruh rencana', 'controls.interactive.ariaLabel': 'Kunci atau buka interaksi' } : undefined}
         nodes={rfNodes}
         edges={rfEdges}
         nodeTypes={nodeTypes}
@@ -198,13 +215,15 @@ export function Board() {
         onConnect={onConnect}
         onNodeDragStart={beginNodeDrag}
         nodesConnectable={!running}
-        panOnDrag={[1]}
-        selectionOnDrag
+        panOnDrag={[0, 1]}
+        selectionOnDrag={false}
         selectionMode={SelectionMode.Partial}
         deleteKeyCode={['Backspace', 'Delete']}
         fitView
+        fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
+        minZoom={0.15}
       >
-        <Background variant={BackgroundVariant.Dots} color="#a68e63" gap={22} size={1} bgColor="#d8c19c" />
+        <Background variant={BackgroundVariant.Dots} color="#bec2bd" gap={22} size={1} bgColor="#e9ece7" />
         <Controls />
       </ReactFlow>
     </div>

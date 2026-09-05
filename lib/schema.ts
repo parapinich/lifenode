@@ -17,7 +17,7 @@ export const LifeNodeSchema = z
     y: z.number(),
     lane: z.enum(LANES).optional(),
     label: z.string().max(60).optional(),
-    durasi: z.number().min(1).max(15).optional(),
+    durasi: z.number().min(0.5).max(15).multipleOf(0.5).optional(),
     intensity: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
     note: z.string().max(140).optional(),
   })
@@ -153,6 +153,7 @@ export interface ValidationIssue {
 // --- Kontrak LLM: ringkasan akhir (CLAUDE.md §9) ---
 
 export const RingkasanRequestSchema = z.object({
+  language: z.enum(['en', 'id']).default('en'),
   kondisiAwal: KondisiAwalSchema,
   stateAkhir: LifeStateSchema,
 })

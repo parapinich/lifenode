@@ -1,6 +1,7 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useT } from '@/lib/locale'
+import { useEffect, useRef, useState } from 'react'
 import { toPng } from 'html-to-image'
 import { Download, Share2, X } from 'lucide-react'
 import type { KondisiAwal, LifeState, RingkasanResponse } from '@/lib/schema'
@@ -29,7 +30,10 @@ export function LifeCard({
   stateAkhir: LifeState
   onClose: () => void
 }) {
+  const t = useT()
   const cardRef = useRef<HTMLDivElement>(null)
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  useEffect(() => { dialogRef.current?.showModal() }, [])
   const [exporting, setExporting] = useState(false)
   const [caseNo] = useState(() => String(Math.floor(Math.random() * 900000) + 100000))
   const uangDelta = stateAkhir.uang - kondisiAwal.uang
@@ -78,11 +82,11 @@ export function LifeCard({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4">
+    <dialog ref={dialogRef} className="case-dialog" aria-label={t("Life verdict")} onCancel={onClose}>
       <div className="max-h-full w-full max-w-md overflow-y-auto">
-        <div ref={cardRef} className="rounded-2xl border-2 border-ink bg-paper-raised p-6">
+        <div ref={cardRef} className="case-document">
           <div className="flex items-center justify-between border-b border-dashed border-line pb-2 font-mono text-[10px] uppercase tracking-widest text-ink-soft">
-            <span>Case Closed</span>
+            <span>{t("Case Closed")}</span>
             <span>No. {caseNo}</span>
           </div>
 
@@ -92,12 +96,12 @@ export function LifeCard({
           <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-1 border-y border-dashed border-line py-3 font-mono text-[11px] text-ink">
             {STAT_ROWS.map(({ key, label }) => (
               <div key={key} className="flex justify-between">
-                <span className="text-ink-soft">{label}</span>
+                <span className="text-ink-soft">{t(label)}</span>
                 <span className="font-semibold">{stateAkhir[key] as number}</span>
               </div>
             ))}
             <div className="col-span-2 flex justify-between">
-              <span className="text-ink-soft">Funds</span>
+              <span className="text-ink-soft">{t("Funds")}</span>
               <span className="font-semibold">
                 {formatRupiah(stateAkhir.uang)} ({uangDelta >= 0 ? '+' : ''}
                 {formatRupiah(uangDelta)})
@@ -109,7 +113,7 @@ export function LifeCard({
             {summary.momenPenentu.map((m, i) => (
               <div key={i} className="flex gap-2 font-sans text-xs text-ink">
                 <span className="shrink-0 font-mono text-[10px] font-semibold text-ink-soft">
-                  EXHIBIT {String.fromCharCode(65 + i)}
+                  {t("EXHIBIT")} {String.fromCharCode(65 + i)}
                 </span>
                 <span>{m}</span>
               </div>
@@ -120,7 +124,7 @@ export function LifeCard({
             {summary.skorPerLane.map((s) => (
               <div key={s.lane} className="flex items-center justify-between">
                 <span className="font-mono text-[10px] uppercase tracking-wider text-ink-soft">
-                  {LANE_LABEL[s.lane]}
+                  {t(LANE_LABEL[s.lane])}
                 </span>
                 <span className="rounded-full border border-ink px-2.5 py-0.5 font-mono text-[10px] font-semibold uppercase text-ink">
                   {s.label}
@@ -136,23 +140,23 @@ export function LifeCard({
             disabled={exporting}
             className="flex items-center gap-1.5 rounded-lg border border-line bg-paper-raised px-3 py-1.5 font-mono text-[11px] uppercase text-ink disabled:opacity-50"
           >
-            <Download size={13} /> Save PNG
+            <Download size={13} /> {t("Save PNG")}
           </button>
           <button
             onClick={handleShare}
             disabled={exporting}
             className="flex items-center gap-1.5 rounded-lg border border-line bg-paper-raised px-3 py-1.5 font-mono text-[11px] uppercase text-ink disabled:opacity-50"
           >
-            <Share2 size={13} /> Share
+            <Share2 size={13} /> {t("Share")}
           </button>
           <button
             onClick={onClose}
             className="flex items-center gap-1.5 rounded-lg border border-line bg-paper-raised px-3 py-1.5 font-mono text-[11px] uppercase text-ink"
           >
-            <X size={13} /> Close
+            <X size={13} /> {t("Close")}
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   )
 }

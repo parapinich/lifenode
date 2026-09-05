@@ -1,14 +1,17 @@
+import { useT } from '@/lib/locale'
 import type { SegmentResultView } from '@/lib/runStore'
 import type { StatusNode } from '@/lib/schema'
 import { Stamp } from '@/components/canvas/nodes/Stamp'
 
 export function SegmentResult({ result, index }: { result: SegmentResultView; index: number }) {
+  const t = useT()
   return (
-    <div className="rounded-xl border border-line bg-paper-raised p-3">
+    <div className="segment-result">
       <div className="mb-1.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-ink-soft">
-        Segment {index + 1}
+        {t('Chapter')} {index + 1}
       </div>
       <p className="font-sans text-sm leading-relaxed text-ink">{result.narasiSegmen}</p>
+      {result.branchNarrative && <p className="mt-2 text-xs italic text-ink-soft">{result.branchNarrative}</p>}
 
       {result.perNode.length > 0 && (
         <ul className="mt-2.5 space-y-1.5 border-t border-dashed border-line pt-2">

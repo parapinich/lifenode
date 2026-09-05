@@ -1,3 +1,4 @@
+import { useT } from '@/lib/locale'
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps, type Edge } from '@xyflow/react'
 import { X } from 'lucide-react'
 import { useGraphStore } from '@/lib/store'
@@ -22,6 +23,7 @@ export function DeletableEdge({
   animated,
   data,
 }: EdgeProps<Edge>) {
+  const t = useT()
   const removeEdge = useGraphStore((s) => s.removeEdge)
   const running = useRunStore((s) => s.running)
   const [edgePath, labelX, labelY] = getBezierPath({
@@ -57,7 +59,7 @@ export function DeletableEdge({
             className="pointer-events-none absolute whitespace-nowrap rounded-md border border-line bg-paper-raised px-1.5 py-0.5 font-sans text-[10px] text-ink-soft"
             style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
           >
-            {conditionLabel || <span className="italic">unlabeled</span>}
+            {conditionLabel || <span className="italic">{t("unlabeled")}</span>}
           </div>
         </EdgeLabelRenderer>
       )}
@@ -73,7 +75,7 @@ export function DeletableEdge({
               transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY - (isIfEdge ? 22 : 0)}px)`,
               pointerEvents: 'all',
             }}
-            title="Delete connection"
+            title={t("Delete connection")}
           >
             <X size={12} />
           </button>

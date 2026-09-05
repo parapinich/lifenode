@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { RingkasanRequestSchema, RingkasanResponseSchema } from '@/lib/schema'
-import { SUMMARY_SYSTEM_PROMPT, buildSummaryUserMessage } from '@/lib/prompts'
+import { SUMMARY_SYSTEM_PROMPT, buildSummaryUserMessage, narrativePrompt } from '@/lib/prompts'
 import { callStructuredLLM, LLMError } from '@/lib/llm'
 
 export async function POST(req: Request) {
@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const summary = await callStructuredLLM(SUMMARY_SYSTEM_PROMPT, buildSummaryUserMessage(parsed.data), RingkasanResponseSchema)
+    const summary = await callStructuredLLM(narrativePrompt(SUMMARY_SYSTEM_PROMPT, parsed.data.language), buildSummaryUserMessage(parsed.data), RingkasanResponseSchema)
     return NextResponse.json(summary)
   } catch (e) {
     if (e instanceof LLMError) return NextResponse.json({ error: e.message }, { status: e.status })

@@ -6,6 +6,17 @@ export class GraphCycleError extends Error {
   }
 }
 
+export function executionGraph(graph: Graph, choices: Record<string, string>): Graph {
+  for (const [nodeId, edgeId] of Object.entries(choices)) {
+    if (!graph.nodes.some((n) => n.id === nodeId && n.kind === 'if') || !graph.edges.some((e) => e.id === edgeId && e.from === nodeId)) throw new Error('Invalid branch choice')
+  }
+  const edges = graph.edges.filter((e) => !choices[e.from] || choices[e.from] === e.id)
+  const start = graph.nodes.find((n) => n.kind === 'start')
+  if (!start) throw new Error('Missing start')
+  const reachable = reachableForward(start.id, graph.nodes, edges)
+  return { nodes: graph.nodes.filter((n) => reachable.has(n.id)), edges: edges.filter((e) => reachable.has(e.from) && reachable.has(e.to)) }
+}
+
 /** Kahn's algorithm. Melempar GraphCycleError kalau ada siklus. */
 export function topologicalSort(nodes: LifeNode[], edges: Edge[]): string[] {
   const indegree = new Map<string, number>()
@@ -64,7 +75,8 @@ export function worstCaseCallCount(graph: Graph): number {
   return (end ? pathCost[end.id] : 0) + 1
 }
 
-export function validateGraph(graph: Graph): ValidationIssue[] {
+export function validateGraph(graph: Graph, language: 'en' | 'id' = 'en'): ValidationIssue[] {
+  const say = (en: string, id: string) => language === 'id' ? id : en
   const { nodes, edges } = graph
   const issues: ValidationIssue[] = []
   const byId = new Map(nodes.map((n) => [n.id, n]))
@@ -82,36 +94,39 @@ export function validateGraph(graph: Graph): ValidationIssue[] {
 
   const starts = nodes.filter((n) => n.kind === 'start')
   const ends = nodes.filter((n) => n.kind === 'end')
-  if (starts.length !== 1) issues.push({ nodeId: '', pesan: `Graph needs exactly one start node, found ${starts.length}` })
-  if (ends.length !== 1) issues.push({ nodeId: '', pesan: `Graph needs exactly one end node, found ${ends.length}` })
+  if (starts.length !== 1) issues.push({ nodeId: '', pesan: say(`Graph needs exactly one start node, found ${starts.length}`, `Rencana perlu satu awal hidup, ditemukan ${starts.length}`) })
+  if (ends.length !== 1) issues.push({ nodeId: '', pesan: say(`Graph needs exactly one end node, found ${ends.length}`, `Rencana perlu satu akhir babak, ditemukan ${ends.length}`) })
 
   for (const n of nodes) {
     const label = n.label ?? n.id
-    if (n.kind === 'merge' && (incoming.get(n.id)?.length ?? 0) < 2) {
-      issues.push({ nodeId: n.id, pesan: `Node '${label}' needs at least 2 incoming connections to be a Merge` })
+    if (n.kind === 'merge' && (incoming.get(n.id)?.length ?? 0) < 1) {
+      issues.push({ nodeId: n.id, pesan: say(`Checkpoint '${label}' needs an incoming connection`, `Titik temu '${label}' perlu hubungan masuk`) })
     }
     if (n.kind === 'aksi') {
-      if (!n.label) issues.push({ nodeId: n.id, pesan: `Step node '${n.id}' is missing a label` })
+      if (!n.label) issues.push({ nodeId: n.id, pesan: say(`Step node '${n.id}' is missing a label`, `Keputusan '${n.id}' belum diberi nama`) })
+    }
+    if ((n.kind === 'aksi' || n.kind === 'tunggu') && n.durasi !== undefined && (!Number.isFinite(n.durasi) || n.durasi < 0.5 || n.durasi > 15 || n.durasi % 0.5 !== 0)) {
+      issues.push({ nodeId: n.id, pesan: say(`Node '${label}' needs a duration of 0.5 to 15 years, in half-year steps`, `Keputusan '${label}' perlu durasi 0,5 sampai 15 tahun, kelipatan setengah tahun`) })
     }
     if (n.kind === 'tunggu') {
-      if (!n.durasi) issues.push({ nodeId: n.id, pesan: `Wait node '${n.id}' is missing a duration` })
+      if (!n.durasi) issues.push({ nodeId: n.id, pesan: say(`Wait node '${n.id}' is missing a duration`, `Waktu tunggu '${n.id}' belum memiliki durasi`) })
       if ((incoming.get(n.id)?.length ?? 0) !== 1) {
-        issues.push({ nodeId: n.id, pesan: `Wait node '${label}' needs exactly 1 incoming connection` })
+        issues.push({ nodeId: n.id, pesan: say(`Wait node '${label}' needs exactly 1 incoming connection`, `Waktu tunggu '${label}' perlu tepat 1 hubungan masuk`) })
       }
       if ((outgoingEdges.get(n.id)?.length ?? 0) !== 1) {
-        issues.push({ nodeId: n.id, pesan: `Wait node '${label}' needs exactly 1 outgoing connection` })
+        issues.push({ nodeId: n.id, pesan: say(`Wait node '${label}' needs exactly 1 outgoing connection`, `Waktu tunggu '${label}' perlu tepat 1 hubungan keluar`) })
       }
     }
     if (n.kind === 'if') {
       const outs = outgoingEdges.get(n.id) ?? []
       if ((incoming.get(n.id)?.length ?? 0) !== 1) {
-        issues.push({ nodeId: n.id, pesan: `If node '${label}' needs exactly 1 incoming connection` })
+        issues.push({ nodeId: n.id, pesan: say(`If node '${label}' needs exactly 1 incoming connection`, `Percabangan '${label}' perlu tepat 1 hubungan masuk`) })
       }
       if (outs.length < 2) {
-        issues.push({ nodeId: n.id, pesan: `If node '${label}' needs at least 2 outgoing branches` })
+        issues.push({ nodeId: n.id, pesan: say(`If node '${label}' needs at least 2 outgoing branches`, `Percabangan '${label}' perlu setidaknya 2 pilihan`) })
       }
       if (outs.some((e) => !e.label)) {
-        issues.push({ nodeId: n.id, pesan: `Every branch out of If node '${label}' needs a condition label` })
+        issues.push({ nodeId: n.id, pesan: say(`Every branch out of If node '${label}' needs a condition label`, `Setiap pilihan dari '${label}' perlu syarat`) })
       }
     }
   }
@@ -120,7 +135,7 @@ export function validateGraph(graph: Graph): ValidationIssue[] {
   try {
     order = topologicalSort(nodes, edges)
   } catch {
-    issues.push({ nodeId: '', pesan: 'Graph contains a cycle' })
+    issues.push({ nodeId: '', pesan: say('Graph contains a cycle', 'Hubungan keputusan membentuk putaran') })
   }
 
   if (order && starts.length === 1 && ends.length === 1) {
@@ -128,7 +143,7 @@ export function validateGraph(graph: Graph): ValidationIssue[] {
     if (worst > MAX_LLM_CALLS) {
       issues.push({
         nodeId: '',
-        pesan: `Graph's worst-case path needs up to ${worst} LLM calls, but the limit is ${MAX_LLM_CALLS} per run`,
+        pesan: say(`Graph's worst-case path needs up to ${worst} LLM calls, but the limit is ${MAX_LLM_CALLS} per run`, `Rencana terlalu panjang: ${worst} bagian, batas ${MAX_LLM_CALLS} per rencana`),
       })
     }
   }
@@ -139,7 +154,7 @@ export function validateGraph(graph: Graph): ValidationIssue[] {
     for (const n of nodes) {
       if (n.id === startId) continue
       if (!reachableFromStart.has(n.id)) {
-        issues.push({ nodeId: n.id, pesan: `Node '${n.label ?? n.id}' isn't connected to start` })
+        issues.push({ nodeId: n.id, pesan: say(`Node '${n.label ?? n.id}' isn't connected to start`, `Keputusan '${n.label ?? n.id}' belum terhubung dengan awal hidup`) })
       }
     }
   }
@@ -150,7 +165,7 @@ export function validateGraph(graph: Graph): ValidationIssue[] {
     for (const n of nodes) {
       if (n.id === endId) continue
       if (!canReachEnd.has(n.id)) {
-        issues.push({ nodeId: n.id, pesan: `Node '${n.label ?? n.id}' has no path to end` })
+        issues.push({ nodeId: n.id, pesan: say(`Node '${n.label ?? n.id}' has no path to end`, `Keputusan '${n.label ?? n.id}' belum terhubung dengan akhir babak`) })
       }
     }
   }
@@ -238,17 +253,15 @@ export function computeGraph(graph: Graph, umurAwal: number): GraphComputation {
     const inEdges = incoming.get(id) ?? []
     if (node.kind === 'start') {
       timing[id] = { umurMulai: umurAwal, umurSelesai: umurAwal }
-    } else if (node.kind === 'merge') {
+    } else if (node.kind === 'merge' || node.kind === 'end') {
       const umurMulai = Math.max(...inEdges.map((e) => timing[e.from].umurSelesai))
       timing[id] = { umurMulai, umurSelesai: umurMulai }
       for (const e of inEdges) {
         gaps.push({ mergeId: id, fromNodeId: e.from, gapTahun: umurMulai - timing[e.from].umurSelesai })
       }
     } else {
-      // aksi / tunggu / end: tepat satu kabel masuk (graf sudah divalidasi).
-      // aksi selalu instan (durasi 0) — durasi cuma lewat node tunggu.
-      const umurMulai = timing[inEdges[0].from].umurSelesai
-      const durasi = node.kind === 'tunggu' ? (node.durasi ?? 0) : 0
+      const umurMulai = Math.max(...inEdges.map((e) => timing[e.from].umurSelesai))
+      const durasi = node.kind === 'aksi' ? (node.durasi ?? 1) : node.kind === 'tunggu' ? (node.durasi ?? 0) : 0
       timing[id] = { umurMulai, umurSelesai: umurMulai + durasi }
     }
   }
@@ -287,6 +300,7 @@ export function computeOneSegment(
     seen.add(id)
     const node = byId.get(id)!
     if (node.kind === 'merge' || node.kind === 'if' || node.kind === 'end') {
+      if (syncEndId && syncEndId !== id) throw new Error('Parallel decisions must meet at the same checkpoint')
       syncEndId = id
       continue
     }
@@ -443,7 +457,7 @@ export function segmentCabang(
       nodes: laneNodes.map((n) => ({
         id: n.id,
         label: n.label ?? '',
-        durasi: n.durasi ?? 0,
+        durasi: n.durasi ?? 1,
         intensity: n.intensity ?? 1,
         note: n.note,
       })),
@@ -454,7 +468,7 @@ export function segmentCabang(
 
 const LAYOUT_LANE_ORDER: Lane[] = ['karir', 'relasi', 'kesehatan', 'chaos']
 const LAYOUT_PX_PER_YEAR = 70
-const LAYOUT_ROW_HEIGHT = 150
+const LAYOUT_ROW_HEIGHT = 340
 const LAYOUT_MARGIN_X = 60
 const LAYOUT_MARGIN_Y = 60
 // Floor for the gap between a node and any direct predecessor — without this,
@@ -489,10 +503,14 @@ export function autoLayout(graph: Graph, umurAwal: number): Record<string, { x: 
   const positions: Record<string, { x: number; y: number }> = {}
   for (const n of graph.nodes) {
     const lane = byId.get(n.id)?.lane
-    const y =
+    let y =
       n.kind === 'aksi' && lane
         ? LAYOUT_MARGIN_Y + LAYOUT_LANE_ORDER.indexOf(lane) * LAYOUT_ROW_HEIGHT
         : LAYOUT_MARGIN_Y + laneBandsHeight / 2 - LAYOUT_ROW_HEIGHT / 2
+    // ponytail: O(n²) placement for small life graphs; use a spatial index if boards grow large.
+    while (Object.values(positions).some((p) => Math.abs(p.x - x[n.id]) < LAYOUT_MIN_GAP_X && Math.abs(p.y - y) < LAYOUT_ROW_HEIGHT)) {
+      y += LAYOUT_ROW_HEIGHT
+    }
     positions[n.id] = { x: x[n.id], y }
   }
   return positions

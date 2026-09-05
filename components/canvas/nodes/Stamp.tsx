@@ -1,3 +1,4 @@
+import { useT } from '@/lib/locale'
 import type { CSSProperties } from 'react'
 import type { StatusNode } from '@/lib/schema'
 
@@ -10,12 +11,13 @@ const STAMP_COLOR: Record<StatusNode, string> = {
 const STAMP_TILT: Record<StatusNode, string> = { sukses: '-4deg', separuh: '3deg', gagal: '-6deg' }
 
 export function Stamp({ status, className = '' }: { status: StatusNode; className?: string }) {
+  const t = useT()
   return (
     <span
       className={`stamp ${STAMP_COLOR[status]} ${className}`}
       style={{ '--stamp-tilt': STAMP_TILT[status] } as CSSProperties}
     >
-      {STAMP_TEXT[status]}
+      {t(STAMP_TEXT[status])}
     </span>
   )
 }

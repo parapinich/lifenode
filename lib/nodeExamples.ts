@@ -11,6 +11,17 @@ export const BACKSTORY_EXAMPLES: string[] = [
   'still living off savings from a startup that got acquired',
 ]
 
-export function randomBackstory(): string {
-  return BACKSTORY_EXAMPLES[Math.floor(Math.random() * BACKSTORY_EXAMPLES.length)]
+const BACKSTORY_ID = [
+  'baru lulus kuliah, belum tahu mau melakukan apa',
+  'bungsu dari empat bersaudara, yang lain sudah mapan',
+  'baru putus, kembali tinggal bersama orang tua',
+  'berhenti kuliah tahun kedua, lalu jadi freelancer',
+  'mewarisi sedikit utang dan ego besar dari ayah',
+  'anak perantau, orang pertama di keluarga yang kuliah',
+  'resign spontan dari pekerjaan tetap tahun lalu',
+  'masih hidup dari tabungan setelah startup diakuisisi',
+]
+export function randomBackstory(language: 'en' | 'id' = 'en'): string {
+  const examples = language === 'id' ? BACKSTORY_ID : BACKSTORY_EXAMPLES
+  return examples[Math.floor(Math.random() * examples.length)]
 }

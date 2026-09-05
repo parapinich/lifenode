@@ -1,62 +1,52 @@
 'use client'
 
+import { useT, useLocaleStore } from '@/lib/locale'
 import dynamic from 'next/dynamic'
 import { ReactFlowProvider } from '@xyflow/react'
 import { useEffect, useMemo, useState } from 'react'
-import { Dices, FileText, History, LayoutGrid, PanelLeft, PanelRight, Play, Redo2, Sparkles, Undo2 } from 'lucide-react'
+import { Activity, Dices, FileText, History, LayoutGrid, LoaderCircle, PanelLeft, PanelRight, Play, Plus, Redo2, RotateCcw, Undo2, X } from 'lucide-react'
 import { useGraphStore } from '@/lib/store'
 import { useRunStore } from '@/lib/runStore'
 import { validateGraph } from '@/lib/graph'
+import { KondisiAwalSchema } from '@/lib/schema'
 import { executeGraph, fetchSummary } from '@/lib/runExecute'
 import { randomBackstory } from '@/lib/nodeExamples'
 import { NodePalette } from '@/components/canvas/NodePalette'
+import { DecisionComposer } from '@/components/canvas/DecisionComposer'
 import { SegmentResult } from '@/components/result/SegmentResult'
 import { LifeCard } from '@/components/result/LifeCard'
 import { HistoryPanel } from '@/components/result/HistoryPanel'
 
-const Board = dynamic(() => import('@/components/canvas/Board').then((m) => m.Board), { ssr: false })
-
-const STAT_LABEL: { key: 'umur' | 'uang' | 'energi' | 'reputasi' | 'kebahagiaan'; label: string }[] = [
-  { key: 'umur', label: 'Age' },
-  { key: 'uang', label: 'Funds' },
-  { key: 'energi', label: 'Energy' },
-  { key: 'reputasi', label: 'Reputation' },
+const Board = dynamic(() => import('@/components/canvas/Board').then((m) => m.Board), {
+  ssr: false,
+  loading: () => <div className="board-loading" role="status"><LoaderCircle className="animate-spin" aria-label="Lifenode" /></div>,
+})
+const STATS = [
+  { key: 'umur', label: 'Age' }, { key: 'uang', label: 'Funds / Rp' },
+  { key: 'energi', label: 'Energy' }, { key: 'reputasi', label: 'Reputation' },
   { key: 'kebahagiaan', label: 'Happiness' },
-]
+] as const
 
 export default function Home() {
-  const nodes = useGraphStore((s) => s.nodes)
-  const edges = useGraphStore((s) => s.edges)
-  const kondisiAwal = useGraphStore((s) => s.kondisiAwal)
-  const setKondisiAwal = useGraphStore((s) => s.setKondisiAwal)
-  const loadTemplate = useGraphStore((s) => s.loadTemplate)
-  const applyAutoLayout = useGraphStore((s) => s.applyAutoLayout)
-  const undo = useGraphStore((s) => s.undo)
-  const redo = useGraphStore((s) => s.redo)
-  const canUndo = useGraphStore((s) => s.past.length > 0)
-  const canRedo = useGraphStore((s) => s.future.length > 0)
-
-  const running = useRunStore((s) => s.running)
-  const lifeState = useRunStore((s) => s.lifeState)
-  const results = useRunStore((s) => s.results)
-  const runError = useRunStore((s) => s.error)
-  const summary = useRunStore((s) => s.summary)
-  const summaryLoading = useRunStore((s) => s.summaryLoading)
-  const summaryError = useRunStore((s) => s.summaryError)
-  const closeSummary = useRunStore((s) => s.closeSummary)
-
-  const [showPalette, setShowPalette] = useState(true)
-  const [showResults, setShowResults] = useState(true)
+  const t = useT()
+  const { language, setLanguage } = useLocaleStore()
+  const { nodes, edges, kondisiAwal, setKondisiAwal, loadTemplate, applyAutoLayout, undo, redo, past, future } = useGraphStore()
+  const { running, lifeState, results, error: runError, summary, summaryLoading, summaryError, closeSummary, chapterComplete, initialConditions, reset } = useRunStore()
+  const [showComposer, setShowComposer] = useState(false)
+  const [showPalette, setShowPalette] = useState(false)
+  const [showResults, setShowResults] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
-
-  const issues = useMemo(() => validateGraph({ nodes, edges }), [nodes, edges])
-  const valid = issues.length === 0
-  const runFinished = !running && results.length > 0 && lifeState !== null
+  const issues = useMemo(() => validateGraph({ nodes, edges }, language), [nodes, edges, language])
+  const intakeValid = KondisiAwalSchema.safeParse(kondisiAwal).success
+  const valid = issues.length === 0 && intakeValid
+  const runFinished = !running && !runError && results.length > 0 && lifeState !== null
+  const decisions = nodes.filter((n) => n.kind === 'aksi').length
+  const stats = lifeState ?? { ...kondisiAwal, energi: 100, reputasi: 50, kebahagiaan: 50 }
+  useEffect(() => { document.documentElement.lang = language }, [language])
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      const tag = (document.activeElement?.tagName ?? '').toLowerCase()
-      if (tag === 'input' || tag === 'select' || tag === 'textarea') return
+      if (running || (e.target instanceof HTMLElement && e.target.closest('input, select, textarea, [contenteditable="true"], dialog'))) return
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return
       e.preventDefault()
       if (e.shiftKey) redo()
@@ -64,188 +54,70 @@ export default function Home() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [undo, redo])
+  }, [undo, redo, running])
 
   return (
-    <div className="flex h-screen flex-col">
-      <header className="border-b border-line bg-paper-raised px-4 py-2.5">
-        <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
-          <div>
-            <div className="font-display text-lg font-semibold leading-none text-ink">Lifenode</div>
-            <div className="font-mono text-[10px] uppercase tracking-widest text-ink-soft">Case Intake Form</div>
-          </div>
-
-          <label className="flex flex-col gap-0.5">
-            <span className="font-mono text-[9px] uppercase tracking-wider text-ink-soft">Age at intake</span>
-            <input
-              type="number"
-              className="w-16 rounded-md border border-line bg-paper px-1.5 py-0.5 font-mono text-xs text-ink outline-none"
-              value={kondisiAwal.umur}
-              disabled={running}
-              onChange={(e) => setKondisiAwal({ umur: Number(e.target.value) })}
-            />
-          </label>
-
-          <label className="flex flex-col gap-0.5">
-            <span className="font-mono text-[9px] uppercase tracking-wider text-ink-soft">Starting funds</span>
-            <input
-              type="number"
-              className="w-24 rounded-md border border-line bg-paper px-1.5 py-0.5 font-mono text-xs text-ink outline-none"
-              value={kondisiAwal.uang}
-              disabled={running}
-              onChange={(e) => setKondisiAwal({ uang: Number(e.target.value) })}
-            />
-          </label>
-
-          <label className="flex min-w-32 flex-1 flex-col gap-0.5">
-            <span className="font-mono text-[9px] uppercase tracking-wider text-ink-soft">Background note</span>
-            <div className="flex items-center gap-1">
-              <input
-                type="text"
-                maxLength={140}
-                className="w-full rounded-md border border-line bg-paper px-1.5 py-0.5 font-sans text-xs text-ink outline-none"
-                value={kondisiAwal.latarBelakang}
-                disabled={running}
-                onChange={(e) => setKondisiAwal({ latarBelakang: e.target.value })}
-              />
-              <button
-                type="button"
-                onClick={() => setKondisiAwal({ latarBelakang: randomBackstory() })}
-                disabled={running}
-                title="Randomize background note"
-                className="shrink-0 rounded-md border border-line bg-paper p-1 text-ink-soft hover:text-ink disabled:opacity-30"
-              >
-                <Dices size={13} />
-              </button>
-            </div>
-          </label>
-
-          <div className="flex items-center gap-1">
-            <button
-              onClick={undo}
-              disabled={!canUndo || running}
-              title="Undo (Ctrl+Z)"
-              className="rounded-lg border border-line bg-paper p-1.5 text-ink disabled:opacity-30"
-            >
-              <Undo2 size={14} />
-            </button>
-            <button
-              onClick={redo}
-              disabled={!canRedo || running}
-              title="Redo (Ctrl+Shift+Z)"
-              className="rounded-lg border border-line bg-paper p-1.5 text-ink disabled:opacity-30"
-            >
-              <Redo2 size={14} />
-            </button>
-            <button
-              onClick={loadTemplate}
-              disabled={running}
-              title="Load an example case"
-              className="rounded-lg border border-line bg-paper p-1.5 text-ink disabled:opacity-30"
-            >
-              <Sparkles size={14} />
-            </button>
-            <button
-              onClick={applyAutoLayout}
-              disabled={running || !valid}
-              title="Tidy up node positions"
-              className="rounded-lg border border-line bg-paper p-1.5 text-ink disabled:opacity-30"
-            >
-              <LayoutGrid size={14} />
-            </button>
-            <button
-              onClick={() => setShowHistory(true)}
-              title="Case history"
-              className="rounded-lg border border-line bg-paper p-1.5 text-ink"
-            >
-              <History size={14} />
-            </button>
-            <button
-              onClick={() => setShowPalette((v) => !v)}
-              title="Toggle decision catalog"
-              className={`rounded-lg border border-line p-1.5 text-ink lg:hidden ${showPalette ? 'bg-ink text-paper' : 'bg-paper'}`}
-            >
-              <PanelLeft size={14} />
-            </button>
-            <button
-              onClick={() => setShowResults((v) => !v)}
-              title="Toggle case file panel"
-              className={`rounded-lg border border-line p-1.5 text-ink lg:hidden ${showResults ? 'bg-ink text-paper' : 'bg-paper'}`}
-            >
-              <PanelRight size={14} />
-            </button>
-          </div>
-
-          <button
-            disabled={!valid || running}
-            title={valid ? undefined : issues.map((i) => i.pesan).join('\n')}
-            onClick={() => executeGraph(nodes, edges, kondisiAwal)}
-            className="flex items-center gap-1.5 rounded-lg border border-ink bg-ink px-4 py-1.5 font-mono text-xs uppercase tracking-wider text-paper disabled:cursor-not-allowed disabled:border-line disabled:bg-line disabled:text-ink-soft"
-          >
-            <Play size={12} /> {running ? 'Running…' : 'Execute'}
-          </button>
-
-          {runFinished && (
-            <button
-              onClick={() => fetchSummary(kondisiAwal, lifeState)}
-              disabled={summaryLoading}
-              className="flex items-center gap-1.5 rounded-lg border border-line bg-paper px-4 py-1.5 font-mono text-xs uppercase tracking-wider text-ink disabled:opacity-50"
-            >
-              <FileText size={12} /> {summaryLoading ? 'Filing…' : 'Close the case'}
-            </button>
-          )}
-        </div>
+    <main className="life-app">
+      <header className="masthead">
+        <div className="brand"><Activity aria-hidden="true" size={27} /><h1>Lifenode<span>.</span></h1></div>
+        <span className="masthead-note">{t("Department of possible futures")}</span>
+        <button className="history-button" aria-label={t('Case history')} title={t('Case history')} onClick={() => setShowHistory(true)}><History size={16} /> <span>{t("Case history")}</span></button>
+        <div className="language-switch" role="group" aria-label={t('Language')}><button aria-pressed={language === 'en'} onClick={() => setLanguage('en')} lang="en">EN</button><button aria-pressed={language === 'id'} onClick={() => setLanguage('id')} lang="id">ID</button></div>
       </header>
-
-      {!valid && (
-        <div className="border-b border-stamp-red/40 bg-stamp-red/10 px-4 py-1 font-mono text-[11px] text-stamp-red">
-          {issues.map((issue, i) => (
-            <div key={i}>{issue.pesan}</div>
-          ))}
-        </div>
-      )}
-
-      {(runError || summaryError) && (
-        <div className="border-b border-stamp-red/40 bg-stamp-red/10 px-4 py-1 font-mono text-[11px] text-stamp-red">
-          {runError ?? summaryError}
-        </div>
-      )}
-
-      {lifeState && (
-        <div className="flex flex-wrap gap-4 border-b border-line bg-paper px-4 py-1.5 font-mono text-[11px] text-ink">
-          {STAT_LABEL.map(({ key, label }) => (
-            <span key={key}>
-              <span className="text-ink-soft">{label}:</span>{' '}
-              {key === 'uang' ? lifeState[key].toLocaleString('id-ID') : lifeState[key]}
-            </span>
-          ))}
-          {!lifeState.hidup && <span className="font-semibold text-stamp-red">Deceased</span>}
-        </div>
-      )}
-
-      <div className="flex flex-1 overflow-hidden">
-        {showPalette && <NodePalette />}
-        <ReactFlowProvider>
-          <Board />
-        </ReactFlowProvider>
-        {showResults && results.length > 0 && (
-          <aside className="w-72 shrink-0 overflow-y-auto border-l border-line bg-paper p-3 lg:w-80">
-            <h2 className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-widest text-ink-soft">
-              Case File
-            </h2>
-            <div className="flex flex-col gap-2">
-              {results.map((r, i) => (
-                <SegmentResult key={r.segmentId} result={r} index={i} />
-              ))}
+      <section className="intake-strip" aria-label={t("Starting conditions")}>
+        <div className="intake-label"><span className="eyebrow">{t("01 / The subject")}</span><strong>{t("Initial conditions")}</strong></div>
+        <label><span>{t("Age")}</span><input aria-label={t("Age at intake")} type="number" min={0} max={100} value={kondisiAwal.umur} disabled={running || !!lifeState} onChange={(e) => setKondisiAwal({ umur: Number(e.target.value) })} /></label>
+        <label className="funds-input"><span>{t("Starting funds / Rp")}</span><input type="number" value={kondisiAwal.uang} disabled={running || !!lifeState} onChange={(e) => setKondisiAwal({ uang: Number(e.target.value) })} /></label>
+        <label className="background-input"><span>{t("Background note")}</span><div><input type="text" maxLength={140} placeholder={t("An ordinary person. For now.")} value={kondisiAwal.latarBelakang} disabled={running || !!lifeState} onChange={(e) => setKondisiAwal({ latarBelakang: e.target.value })} /><button type="button" className="icon-button" title={t("Randomize background note")} aria-label={t("Randomize background note")} disabled={running || !!lifeState} onClick={() => setKondisiAwal({ latarBelakang: randomBackstory(language) })}><Dices size={17} /></button></div></label>
+      </section>
+      <ReactFlowProvider>
+        <div className="workspace">
+          <NodePalette open={showPalette} onClose={() => setShowPalette(false)} />
+          <section className="canvas-column" aria-label={t("Life plan")}>
+            <div className="canvas-toolbar">
+              <div className="canvas-title"><span className="eyebrow">{t("02 / The plan")}</span><h2>{t("A life, pending.")}</h2></div>
+              <div className="canvas-actions">
+                <button className="icon-button mobile-panel-button catalog-trigger" title={t("Decision catalog")} aria-label={t("Decision catalog")} aria-expanded={showPalette} onClick={() => { setShowPalette(!showPalette); setShowResults(false) }}><PanelLeft size={17} /></button>
+                <button className="icon-button" title={t('Your decision')} aria-label={t('Your decision')} onClick={() => setShowComposer(!showComposer)} aria-expanded={showComposer} disabled={running || summaryLoading || lifeState?.hidup === false}><Plus size={17} /></button>
+                {!lifeState ? <><button className="icon-button" title={t("Undo (Ctrl+Z)")} aria-label={t("Undo")} onClick={undo} disabled={!past.length || running}><Undo2 size={17} /></button>
+                <button className="icon-button" title={t("Redo (Ctrl+Shift+Z)")} aria-label={t("Redo")} onClick={redo} disabled={!future.length || running}><Redo2 size={17} /></button></> : <button className="icon-button" title={t('New life')} aria-label={t('New life')} disabled={running || summaryLoading} onClick={() => { if (window.confirm(t('Restart this life? The current progress will be cleared.'))) { reset(); setShowResults(false) } }}><RotateCcw size={17} /></button>}
+                <button className="icon-button" title={t("Tidy up node positions")} aria-label={t("Tidy up node positions")} onClick={applyAutoLayout} disabled={running || issues.length > 0}><LayoutGrid size={17} /></button>
+                <button className="icon-button mobile-panel-button" title={t("Case file")} aria-label={t("Case file")} aria-expanded={showResults} onClick={() => { setShowResults(!showResults); setShowPalette(false) }}><PanelRight size={17} /></button>
+                <button className="execute-button" disabled={!valid || running || summaryLoading || chapterComplete || lifeState?.hidup === false} onClick={() => { setShowResults(true); setShowPalette(false); setShowComposer(false); void executeGraph(nodes, edges, kondisiAwal) }} title={valid ? t("Execute life plan") : t("Resolve the outstanding issues")}>
+                  {running ? <LoaderCircle className="animate-spin" size={15} /> : <Play size={15} fill="currentColor" />}<span>{t(running ? 'Unfolding...' : chapterComplete ? 'Chapter complete' : runError ? 'Try again' : lifeState ? 'Continue chapter' : 'Run chapter')}</span>
+                </button>
+              </div>
             </div>
+            {(!valid || runError || summaryError) && (
+              <div className="case-alert" role={runError || summaryError ? 'alert' : undefined}>
+                {runError || summaryError || (!intakeValid ? t("Age must be between 0 and 100. Check the starting conditions.") : (
+                  <details><summary>{issues.length} {t('issues to resolve')}</summary>{issues.map((issue, i) => <p key={i}>{issue.pesan}</p>)}</details>
+                ))}
+              </div>
+            )}
+            <div className="canvas-surface">
+              <Board />
+              {showComposer && <div className="canvas-composer"><button className="icon-button" title={t('Close')} aria-label={t('Close')} onClick={() => setShowComposer(false)}><X size={16} /></button><DecisionComposer onAdded={() => { setShowComposer(false); applyAutoLayout() }} /></div>}
+              {!showComposer && nodes.length === 2 && edges.length === 0 && <div className="empty-case"><span className="eyebrow">{t("No decisions on record")}</span><p>{t("Your future has no alibi.")}</p><button onClick={() => setShowComposer(true)}><Plus size={15} /> {t('Your decision')}</button><button onClick={loadTemplate} disabled={running}><FileText size={15} /> {t("Open an example case")}</button></div>}
+            </div>
+            <footer className="canvas-footer"><span><i className={running ? 'status-dot active' : 'status-dot'} />{running ? t("Consequences in progress") : runError ? t("Case interrupted") : runFinished ? t("Outcome on record") : t("Draft / not yet lived")}</span><span>{decisions} {t('decisions')} / {edges.length} {t('connections')}</span></footer>
+          </section>
+          <aside className={`case-panel ${showResults ? 'is-open' : ''}`} aria-label={t("Case file")}>
+            <div className="panel-heading"><div><span className="eyebrow">{t("03 / The consequences")}</span><h2>{t("Case file")}</h2></div><button className="icon-button mobile-panel-button" aria-label={t("Close case file")} title={t("Close case file")} onClick={() => setShowResults(false)}><X size={17} /></button></div>
+            <div className="resource-heading"><span className="eyebrow">{lifeState ? t("Resources remaining") : t("Resources on arrival")}</span>{lifeState && !lifeState.hidup && <span className="text-stamp-red">{t("Deceased")}</span>}</div>
+            <dl className="resource-ledger">{STATS.map(({ key, label }) => <div key={key}><dt>{t(label)}</dt><dd>{stats[key].toLocaleString('id-ID')}{key !== 'umur' && key !== 'uang' && <meter min={0} max={100} value={stats[key]} aria-label={t(label)} />}</dd></div>)}</dl>
+            <div className="record-heading"><span className="eyebrow">{t("Record of events")}</span><span className="record-count">{String(results.length).padStart(2, '0')}</span></div>
+            <div className="case-events" aria-live="polite" aria-busy={running}>
+              {results.length === 0 ? <div className="empty-record"><FileText size={30} strokeWidth={1} /><h3>{running ? t("Reality is deliberating.") : t("Nothing has happened. Yet.")}</h3><p>{running ? t("The first consequences are pending.") : t("All plans look reasonable before the consequences arrive.")}</p></div> : results.map((r, i) => <SegmentResult key={r.segmentId} result={r} index={i} />)}
+              {running && <div className="running-note" role="status"><LoaderCircle size={14} className="animate-spin" /> {t("Recording consequences...")}</div>}
+            </div>
+            {chapterComplete && lifeState?.hidup && <div className="chapter-response"><DecisionComposer onAdded={() => { setShowResults(false); applyAutoLayout() }} /></div>}
+            {runFinished && <button className="close-case-button" onClick={() => fetchSummary(kondisiAwal, lifeState)} disabled={summaryLoading}><FileText size={16} />{summaryLoading ? t("Filing...") : t("Close the case")}</button>}
           </aside>
-        )}
-      </div>
-
-      {summary && lifeState && (
-        <LifeCard summary={summary} kondisiAwal={kondisiAwal} stateAkhir={lifeState} onClose={closeSummary} />
-      )}
+        </div>
+      </ReactFlowProvider>
+      {summary && lifeState && <LifeCard summary={summary} kondisiAwal={initialConditions ?? kondisiAwal} stateAkhir={lifeState} onClose={closeSummary} />}
       {showHistory && <HistoryPanel onClose={() => setShowHistory(false)} />}
-    </div>
+    </main>
   )
 }

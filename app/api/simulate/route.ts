@@ -7,12 +7,14 @@ import {
   SegmentRequestSchema,
   SegmentResponseSchema,
 } from '@/lib/schema'
-import { computeGraph, computeOneSegment, segmentCabang, validateGraph, GraphCycleError } from '@/lib/graph'
+import { computeGraph, computeOneSegment, executionGraph, segmentCabang, validateGraph, GraphCycleError } from '@/lib/graph'
 import { hitungKepadatan } from '@/lib/engine'
-import { SYSTEM_PROMPT, buildSegmentUserMessage } from '@/lib/prompts'
+import { SYSTEM_PROMPT, buildSegmentUserMessage, narrativePrompt } from '@/lib/prompts'
 import { callStructuredLLM, LLMError } from '@/lib/llm'
 
 const RequestSchema = z.object({
+  language: z.enum(['en', 'id']).default('en'),
+  choices: z.record(z.string(), z.string()).default({}),
   graph: GraphSchema,
   kondisiAwal: KondisiAwalSchema,
   fromSyncId: z.string(),
@@ -25,7 +27,7 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid request', detail: parsed.error.flatten() }, { status: 400 })
   }
-  const { graph, kondisiAwal, fromSyncId, state } = parsed.data
+  const { graph, kondisiAwal, fromSyncId, state, language, choices } = parsed.data
 
   // The server doesn't trust the client's math — recompute from the raw graph.
   // validateGraph also enforces the worst-case 6-LLM-call budget (CLAUDE.md §5).
@@ -35,11 +37,13 @@ export async function POST(req: Request) {
   }
 
   let timing
+  let playable
   try {
-    timing = computeGraph(graph, kondisiAwal.umur).timing
+    playable = executionGraph(graph, choices)
+    timing = computeGraph(playable, kondisiAwal.umur).timing
   } catch (e) {
     if (e instanceof GraphCycleError) return NextResponse.json({ error: e.message }, { status: 400 })
-    throw e
+    return NextResponse.json({ error: 'Invalid branch choices' }, { status: 400 })
   }
 
   if (!timing[fromSyncId]) {
@@ -48,12 +52,12 @@ export async function POST(req: Request) {
 
   let segment
   try {
-    segment = computeOneSegment(graph.nodes, graph.edges, timing, fromSyncId)
+    segment = computeOneSegment(playable.nodes, playable.edges, timing, fromSyncId)
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Failed to compute segment' }, { status: 400 })
   }
 
-  const cabang = segmentCabang(segment, graph.nodes, graph.edges, timing)
+  const cabang = segmentCabang(segment, playable.nodes, playable.edges, timing)
   const lamaSegmen = segment.umurSelesai - segment.umurMulai
   const kepadatan = hitungKepadatan(cabang, lamaSegmen)
 
@@ -69,7 +73,11 @@ export async function POST(req: Request) {
   const llmRequest = parsedRequest.data
 
   try {
-    const llmResponse = await callStructuredLLM(SYSTEM_PROMPT, buildSegmentUserMessage(llmRequest), SegmentResponseSchema)
+    const llmResponse = await callStructuredLLM(narrativePrompt(SYSTEM_PROMPT, language), buildSegmentUserMessage(llmRequest), SegmentResponseSchema)
+    if (llmResponse.perNode.length !== segment.nodeIds.length || new Set(llmResponse.perNode.map((n) => n.nodeId)).size !== segment.nodeIds.length || llmResponse.perNode.some((n) => !segment.nodeIds.includes(n.nodeId))) {
+      return NextResponse.json({ error: 'Invalid decision outcomes' }, { status: 502 })
+    }
+    llmResponse.stateBaru.umur = segment.umurSelesai
     return NextResponse.json(llmResponse)
   } catch (e) {
     if (e instanceof LLMError) return NextResponse.json({ error: e.message }, { status: e.status })

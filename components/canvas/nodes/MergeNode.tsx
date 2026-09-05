@@ -1,3 +1,4 @@
+import { useT } from '@/lib/locale'
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react'
 import { Trash2, GitMerge } from 'lucide-react'
 import { useGraphStore } from '@/lib/store'
@@ -5,8 +6,9 @@ import { useRunStore } from '@/lib/runStore'
 import type { LifeFlowNodeData } from './shared'
 
 export function MergeNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
+  const t = useT()
   const removeNode = useGraphStore((s) => s.removeNode)
-  const running = useRunStore((s) => s.running)
+  const running = useRunStore((s) => s.running || s.summaryLoading || s.lockedNodeIds.includes(id))
   const hasIssue = data.issues.length > 0
   const isLoading = data.runStatus === 'loading'
 
@@ -20,13 +22,13 @@ export function MergeNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
       <Handle type="target" position={Position.Left} className="!bg-paper" />
       <GitMerge size={13} className="shrink-0" />
       <span className="font-mono text-[11px] uppercase tracking-wider">
-        Sync{data.umurMulai !== undefined ? ` · age ${data.umurMulai}` : ''}
+        {t("Sync")}{data.umurMulai !== undefined ? ` / ${t("age")} ${data.umurMulai}` : ''}
       </span>
       {!running && (
         <button
           onClick={() => removeNode(id)}
-          className="nodrag absolute -right-2 -top-2 hidden h-5 w-5 items-center justify-center rounded-full bg-stamp-red text-paper group-hover:flex"
-          title="Delete step"
+          className="nodrag absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-stamp-red text-paper"
+          title={t("Delete step")}
         >
           <Trash2 size={11} />
         </button>

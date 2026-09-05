@@ -18,6 +18,22 @@ function edge(id: string, from: string, to: string): Edge {
   return { id, from, to }
 }
 
+it('keeps parallel decision cards and waits from overlapping after layout', () => {
+  const nodes: LifeNode[] = [node({ id: 'start', kind: 'start' }), node({ id: 'end', kind: 'end' })]
+  const edges: Edge[] = []
+  for (const [index, lane] of (['karir', 'relasi', 'relasi'] as const).entries()) {
+    nodes.push(node({ id: `a${index}`, kind: 'aksi', lane, label: 'Decision', intensity: 1 }))
+    nodes.push(node({ id: `w${index}`, kind: 'tunggu', durasi: 2 }))
+    edges.push(edge(`s${index}`, 'start', `a${index}`), edge(`t${index}`, `a${index}`, `w${index}`), edge(`e${index}`, `w${index}`, 'end'))
+  }
+  const positions = Object.values(autoLayout({ nodes, edges }, 20))
+  for (let i = 0; i < positions.length; i++) {
+    for (let j = i + 1; j < positions.length; j++) {
+      expect(Math.abs(positions[i].x - positions[j].x) >= 260 || Math.abs(positions[i].y - positions[j].y) >= 340).toBe(true)
+    }
+  }
+})
+
 describe('graf linear', () => {
   const graph: Graph = {
     nodes: [
@@ -33,14 +49,14 @@ describe('graf linear', () => {
     expect(validateGraph(graph)).toEqual([])
   })
 
-  it('aksi selalu instan, umur maju lewat node tunggu', () => {
+  it('aksi memiliki durasi default satu tahun, waktu tunggu ditambahkan', () => {
     const { timing, segments } = computeGraph(graph, 18)
     expect(timing.start).toEqual({ umurMulai: 18, umurSelesai: 18 })
-    expect(timing.kuliah).toEqual({ umurMulai: 18, umurSelesai: 18 })
-    expect(timing['kuliah-wait']).toEqual({ umurMulai: 18, umurSelesai: 22 })
-    expect(timing.end).toEqual({ umurMulai: 22, umurSelesai: 22 })
+    expect(timing.kuliah).toEqual({ umurMulai: 18, umurSelesai: 19 })
+    expect(timing['kuliah-wait']).toEqual({ umurMulai: 19, umurSelesai: 23 })
+    expect(timing.end).toEqual({ umurMulai: 23, umurSelesai: 23 })
     expect(segments).toHaveLength(1)
-    expect(segments[0]).toMatchObject({ syncStartId: 'start', syncEndId: 'end', umurMulai: 18, umurSelesai: 22, nodeIds: ['kuliah'] })
+    expect(segments[0]).toMatchObject({ syncStartId: 'start', syncEndId: 'end', umurMulai: 18, umurSelesai: 23, nodeIds: ['kuliah'] })
   })
 })
 
@@ -68,9 +84,9 @@ describe('graf bercabang dengan merge timpang', () => {
 
   it('gapTahun dihitung dari selisih cabang terpanjang', () => {
     const { timing, gaps, segments } = computeGraph(graph, 20)
-    expect(timing['karir-wait'].umurSelesai).toBe(29)
-    expect(timing['relasi-wait'].umurSelesai).toBe(23)
-    expect(timing.merge1.umurMulai).toBe(29)
+    expect(timing['karir-wait'].umurSelesai).toBe(30)
+    expect(timing['relasi-wait'].umurSelesai).toBe(24)
+    expect(timing.merge1.umurMulai).toBe(30)
     expect(gaps).toContainEqual({ mergeId: 'merge1', fromNodeId: 'relasi-wait', gapTahun: 6 })
     expect(gaps).toContainEqual({ mergeId: 'merge1', fromNodeId: 'karir-wait', gapTahun: 0 })
 
@@ -78,7 +94,7 @@ describe('graf bercabang dengan merge timpang', () => {
     const seg1 = segments.find((s) => s.syncStartId === 'start')!
     expect(seg1.nodeIds.sort()).toEqual(['karir', 'relasi'])
     expect(seg1.umurMulai).toBe(20)
-    expect(seg1.umurSelesai).toBe(29)
+    expect(seg1.umurSelesai).toBe(30)
     const seg2 = segments.find((s) => s.syncStartId === 'merge1')!
     expect(seg2.syncEndId).toBe('end')
     expect(seg2.nodeIds).toEqual([])
@@ -95,7 +111,7 @@ describe('graf bercabang dengan merge timpang', () => {
     expect(karir.gapTahun).toBe(0)
     // relasi cuma 3 tahun (relasi-wait) — nganggur 6 tahun nunggu karir kelar.
     expect(relasi.gapTahun).toBe(6)
-    expect(karir.nodes).toEqual([{ id: 'karir', label: 'Buka warung', durasi: 0, intensity: 3, note: undefined }])
+    expect(karir.nodes).toEqual([{ id: 'karir', label: 'Buka warung', durasi: 1, intensity: 3, note: undefined }])
   })
 
   it('autoLayout nempatin node per lane band dan x ngikutin umur', () => {
@@ -109,7 +125,7 @@ describe('graf bercabang dengan merge timpang', () => {
 })
 
 describe('node tunggu', () => {
-  it('cabang tanpa node tunggu sama sekali tetep instan (durasi 0)', () => {
+  it('aksi tetap memajukan waktu tanpa node tunggu', () => {
     const graph: Graph = {
       nodes: [
         node({ id: 'start', kind: 'start' }),
@@ -119,8 +135,8 @@ describe('node tunggu', () => {
       edges: [edge('e1', 'start', 'putus'), edge('e2', 'putus', 'end')],
     }
     const { timing } = computeGraph(graph, 25)
-    expect(timing.putus).toEqual({ umurMulai: 25, umurSelesai: 25 })
-    expect(timing.end).toEqual({ umurMulai: 25, umurSelesai: 25 })
+    expect(timing.putus).toEqual({ umurMulai: 25, umurSelesai: 26 })
+    expect(timing.end).toEqual({ umurMulai: 26, umurSelesai: 26 })
   })
 
   it('menolak tunggu tanpa durasi atau dengan kabel masuk/keluar yang salah', () => {
@@ -150,7 +166,7 @@ describe('validasi graf', () => {
     expect(validateGraph(graph)).toContainEqual({ nodeId: '', pesan: 'Graph contains a cycle' })
   })
 
-  it('menolak merge dengan kurang dari 2 kabel masuk', () => {
+  it('menerima titik babak dengan satu kabel masuk', () => {
     const graph: Graph = {
       nodes: [
         node({ id: 'start', kind: 'start' }),
@@ -160,7 +176,7 @@ describe('validasi graf', () => {
       edges: [edge('e1', 'start', 'merge1'), edge('e2', 'merge1', 'end')],
     }
     const issues = validateGraph(graph)
-    expect(issues.some((i) => i.nodeId === 'merge1')).toBe(true)
+    expect(issues).toEqual([])
   })
 
   it('menandai node yang nggak nyambung ke start', () => {
@@ -236,8 +252,8 @@ describe('node if', () => {
 
   it('timing if dan node abis if ngikutin jalur yang sama kayak node lain', () => {
     const { timing } = computeGraph(graph, 20)
-    expect(timing.if1).toEqual({ umurMulai: 20, umurSelesai: 20 })
-    expect(timing.untung).toEqual({ umurMulai: 20, umurSelesai: 20 })
+    expect(timing.if1).toEqual({ umurMulai: 21, umurSelesai: 21 })
+    expect(timing.untung).toEqual({ umurMulai: 21, umurSelesai: 22 })
   })
 })
 

@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { GraphSchema, IfRequestSchema, IfResponseSchema, KondisiAwalSchema, LifeStateSchema } from '@/lib/schema'
-import { computeGraph, validateGraph, GraphCycleError } from '@/lib/graph'
-import { IF_SYSTEM_PROMPT, buildIfUserMessage } from '@/lib/prompts'
+import { computeGraph, executionGraph, validateGraph, GraphCycleError } from '@/lib/graph'
+import { IF_SYSTEM_PROMPT, buildIfUserMessage, narrativePrompt } from '@/lib/prompts'
 import { callStructuredLLM, LLMError } from '@/lib/llm'
 
 const RequestSchema = z.object({
+  language: z.enum(['en', 'id']).default('en'),
+  choices: z.record(z.string(), z.string()).default({}),
   graph: GraphSchema,
   kondisiAwal: KondisiAwalSchema,
   state: LifeStateSchema,
@@ -18,7 +20,7 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid request', detail: parsed.error.flatten() }, { status: 400 })
   }
-  const { graph, kondisiAwal, state, ifNodeId } = parsed.data
+  const { graph, kondisiAwal, state, ifNodeId, language, choices } = parsed.data
 
   // The server doesn't trust the client's math — recompute from the raw graph.
   const issues = validateGraph(graph)
@@ -36,10 +38,10 @@ export async function POST(req: Request) {
 
   let timing
   try {
-    timing = computeGraph(graph, kondisiAwal.umur).timing
+    timing = computeGraph(executionGraph(graph, choices), kondisiAwal.umur).timing
   } catch (e) {
     if (e instanceof GraphCycleError) return NextResponse.json({ error: e.message }, { status: 400 })
-    throw e
+    return NextResponse.json({ error: 'Invalid branch choices' }, { status: 400 })
   }
   if (!timing[ifNodeId]) {
     return NextResponse.json({ error: `Unknown if node '${ifNodeId}'` }, { status: 400 })
@@ -57,7 +59,7 @@ export async function POST(req: Request) {
   const llmRequest = parsedRequest.data
 
   try {
-    const llmResponse = await callStructuredLLM(IF_SYSTEM_PROMPT, buildIfUserMessage(llmRequest), IfResponseSchema)
+    const llmResponse = await callStructuredLLM(narrativePrompt(IF_SYSTEM_PROMPT, language), buildIfUserMessage(llmRequest), IfResponseSchema)
     if (!pilihan.some((p) => p.edgeId === llmResponse.edgeId)) {
       return NextResponse.json({ error: 'LLM picked a branch that was not offered' }, { status: 502 })
     }

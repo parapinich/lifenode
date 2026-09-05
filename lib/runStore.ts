@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import type { LifeState, RingkasanResponse, StatusNode } from './schema'
+import { persist } from 'zustand/middleware'
+import type { KondisiAwal, LifeState, RingkasanResponse, StatusNode } from './schema'
 
 export type NodeRunStatus = 'idle' | 'loading' | StatusNode | 'skipped'
 
@@ -13,10 +14,17 @@ export interface SegmentResultView {
   narasiSegmen: string
   narasiGap: { lane: string; teks: string }[]
   perNode: { nodeId: string; status: StatusNode; teks: string; alasan?: string }[]
+  branchNarrative?: string
 }
 
 interface RunStore {
   running: boolean
+  nextSyncId: string | null
+  chapterComplete: boolean
+  lockedNodeIds: string[]
+  selectedBranches: Record<string, string>
+  branchNarratives: Record<string, string>
+  initialConditions: KondisiAwal | null
   nodeStatus: Record<string, NodeRunStatus>
   initialState: LifeState | null
   lifeState: LifeState | null
@@ -34,10 +42,17 @@ interface RunStore {
   setSummary: (summary: RingkasanResponse) => void
   failSummary: (message: string) => void
   closeSummary: () => void
+  reset: () => void
 }
 
-export const useRunStore = create<RunStore>((set) => ({
+export const useRunStore = create<RunStore>()(persist((set) => ({
   running: false,
+  nextSyncId: null,
+  chapterComplete: false,
+  lockedNodeIds: [],
+  selectedBranches: {},
+  branchNarratives: {},
+  initialConditions: null,
   nodeStatus: {},
   initialState: null,
   lifeState: null,
@@ -63,4 +78,10 @@ export const useRunStore = create<RunStore>((set) => ({
   setSummary: (summary) => set({ summary, summaryLoading: false }),
   failSummary: (message) => set({ summaryLoading: false, summaryError: message }),
   closeSummary: () => set({ summary: null, summaryError: null }),
+  reset: () => set({ running: false, nextSyncId: null, chapterComplete: false, lockedNodeIds: [], selectedBranches: {}, branchNarratives: {}, initialConditions: null, nodeStatus: {}, initialState: null, lifeState: null, results: [], error: null, summary: null, summaryLoading: false, summaryError: null }),
+}), {
+  name: 'lifenode-run',
+  partialize: (s) => ({ ...s, running: false, summaryLoading: false, nodeStatus: Object.fromEntries(Object.entries(s.nodeStatus).map(([id, status]) => [id, status === 'loading' ? 'idle' as const : status])) }),
 }))
+
+export function isNodeLocked(id: string): boolean { return useRunStore.getState().lockedNodeIds.includes(id) }

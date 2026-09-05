@@ -1,169 +1,87 @@
-import { computeGraph, computeOneSegment } from './graph'
+import { computeGraph, computeOneSegment, executionGraph, validateGraph } from './graph'
 import { appendLedger, applyDelta } from './engine'
-import { useRunStore, type NodeRunStatus } from './runStore'
+import { useRunStore } from './runStore'
 import { useHistoryStore } from './historyStore'
-import {
-  IfResponseSchema,
-  RingkasanResponseSchema,
-  SegmentResponseSchema,
-  type Edge,
-  type KondisiAwal,
-  type LifeNode,
-  type LifeState,
-} from './schema'
-
-/** Tandai semua node di cabang-cabang if yang NGGAK kepilih sebagai 'skipped'.
- * Berhenti begitu ketemu sync point (merge/if/end) — itu titik reconvergence,
- * bisa aja masih kepakai lewat jalur yang beneran jalan (lihat CLAUDE.md §2,
- * cabang selalu ketemu lagi di satu titik sync yang sama). */
-function markSkipped(
-  ifNodeId: string,
-  chosenEdgeId: string,
-  nodes: LifeNode[],
-  edges: Edge[],
-  setNodeStatus: (id: string, status: NodeRunStatus) => void
-): void {
-  const byId = new Map(nodes.map((n) => [n.id, n]))
-  const outgoing = new Map<string, Edge[]>()
-  for (const n of nodes) outgoing.set(n.id, [])
-  for (const e of edges) outgoing.get(e.from)?.push(e)
-
-  const seen = new Set<string>()
-  const stack = (outgoing.get(ifNodeId) ?? []).filter((e) => e.id !== chosenEdgeId).map((e) => e.to)
-  while (stack.length > 0) {
-    const id = stack.pop()!
-    if (seen.has(id)) continue
-    seen.add(id)
-    const node = byId.get(id)
-    if (!node || node.kind === 'merge' || node.kind === 'if' || node.kind === 'end') continue
-    setNodeStatus(id, 'skipped')
-    for (const e of outgoing.get(id) ?? []) stack.push(e.to)
-  }
-}
+import { translate, useLocaleStore } from './locale'
+import { GraphSchema, KondisiAwalSchema, IfResponseSchema, RingkasanResponseSchema, SegmentResponseSchema, type Edge, type KondisiAwal, type LifeNode, type LifeState } from './schema'
 
 export async function executeGraph(nodes: LifeNode[], edges: Edge[], kondisiAwal: KondisiAwal): Promise<void> {
-  const { startRun, setNodeStatus, pushResult, finishRun, fail } = useRunStore.getState()
-
-  const initial: LifeState = {
-    umur: kondisiAwal.umur,
-    uang: kondisiAwal.uang,
-    energi: 100,
-    reputasi: 50,
-    kebahagiaan: 50,
-    skill: [],
-    relasi: [],
-    ledger: [],
-    hidup: true,
-  }
-  startRun(initial)
-
-  const startNode = nodes.find((n) => n.kind === 'start')
-  const endNode = nodes.find((n) => n.kind === 'end')
-  if (!startNode || !endNode) return fail('Graph is missing a start or end node')
-
-  const byId = new Map(nodes.map((n) => [n.id, n]))
-  let timing
+  const run = useRunStore.getState()
+  if (run.running || run.summaryLoading || run.chapterComplete || run.lifeState?.hidup === false) return
+  const language = useLocaleStore.getState().language
+  let activeIds: string[] = []
   try {
-    timing = computeGraph({ nodes, edges }, kondisiAwal.umur).timing
-  } catch (e) {
-    return fail(e instanceof Error ? e.message : 'Failed to compute graph timing')
+    GraphSchema.parse({ nodes, edges })
+    KondisiAwalSchema.parse(kondisiAwal)
+    const issues = validateGraph({ nodes, edges })
+    if (issues.length) throw new Error(issues.map((issue) => issue.pesan).join('\n'))
+    const start = nodes.find((n) => n.kind === 'start')!
+    const initial: LifeState = { umur: kondisiAwal.umur, uang: kondisiAwal.uang, energi: 100, reputasi: 50, kebahagiaan: 50, skill: [], relasi: [], ledger: [], hidup: true }
+    if (!run.lifeState) {
+      run.startRun(initial)
+      useRunStore.setState({ initialConditions: { ...kondisiAwal }, nextSyncId: start.id, lockedNodeIds: [start.id] })
+    } else {
+      useRunStore.setState({ running: true, error: null, summary: null, summaryError: null })
+    }
+    const state = useRunStore.getState().lifeState!
+    const cursor = useRunStore.getState().nextSyncId ?? start.id
+    const choices = { ...run.selectedBranches }
+    let branchNarrative: string | undefined = run.branchNarratives[cursor]
+    if (nodes.find((n) => n.id === cursor)?.kind === 'if' && !choices[cursor]) {
+      const response = await fetch('/api/branch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ graph: { nodes, edges }, kondisiAwal, state, ifNodeId: cursor, language, choices }) })
+      if (!response.ok) throw new Error('Branch request failed')
+      const choice = IfResponseSchema.parse(await response.json())
+      const chosenEdge = edges.find((e) => e.id === choice.edgeId && e.from === cursor)
+      if (!chosenEdge) throw new Error('Invalid branch')
+      choices[cursor] = choice.edgeId
+      useRunStore.setState((s) => ({ selectedBranches: choices, branchNarratives: { ...s.branchNarratives, [cursor]: choice.narasi }, lockedNodeIds: [...new Set([...s.lockedNodeIds, chosenEdge.to])] }))
+      branchNarrative = choice.narasi
+    }
+    const playable = executionGraph({ nodes, edges }, choices)
+    const { timing } = computeGraph(playable, kondisiAwal.umur)
+    const segment = computeOneSegment(playable.nodes, playable.edges, timing, cursor)
+    activeIds = segment.nodeIds
+    for (const id of activeIds) run.setNodeStatus(id, 'loading')
+    const response = await fetch('/api/simulate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ graph: { nodes, edges }, kondisiAwal, fromSyncId: cursor, state, language, choices }) })
+    if (!response.ok) throw new Error('Simulation request failed')
+    const result = SegmentResponseSchema.parse(await response.json())
+    if (result.perNode.length !== activeIds.length || new Set(result.perNode.map((n) => n.nodeId)).size !== activeIds.length || result.perNode.some((n) => !activeIds.includes(n.nodeId))) throw new Error('Invalid decision outcomes')
+    // Time is a game rule, not a number the narrator may improvise.
+    const nextState = appendLedger(applyDelta(state, { ...result.stateBaru, umur: segment.umurSelesai }), result.kejadianPenting)
+    const visited = new Set([cursor, segment.syncEndId])
+    const stack = playable.edges.filter((e) => e.from === cursor).map((e) => e.to)
+    while (stack.length) {
+      const id = stack.pop()!
+      if (visited.has(id)) continue
+      visited.add(id)
+      for (const e of playable.edges.filter((e) => e.from === id)) stack.push(e.to)
+    }
+    for (const outcome of result.perNode) run.setNodeStatus(outcome.nodeId, outcome.status)
+    for (const node of nodes) {
+      if (!playable.nodes.some((n) => n.id === node.id)) { run.setNodeStatus(node.id, 'skipped'); visited.add(node.id) }
+    }
+    run.pushResult({ segmentId: `${run.results.length}:${segment.id}`, narasiSegmen: result.narasiSegmen, narasiGap: result.narasiGap, perNode: result.perNode, branchNarrative }, nextState)
+    useRunStore.setState((s) => ({ nextSyncId: segment.syncEndId, lockedNodeIds: [...new Set([...s.lockedNodeIds, ...visited])], chapterComplete: nodes.find((n) => n.id === segment.syncEndId)?.kind === 'end' || !nextState.hidup }))
+    run.finishRun()
+  } catch {
+    for (const id of activeIds) run.setNodeStatus(id, 'idle')
+    run.fail(translate(language, 'Something went wrong. Your progress is saved; try again.'))
   }
-
-  let state = initial
-  let currentSyncId = startNode.id
-
-  // Jalan inkremental: hitung SATU segmen dari posisi sekarang, jalanin, terus
-  // maju ke sync point berikutnya. Beda dari model lama (segments dihitung
-  // penuh di depan) — di sini jalurnya baru ketauan pas node if mutusin cabang.
-  while (currentSyncId !== endNode.id) {
-    const segment = computeOneSegment(nodes, edges, timing, currentSyncId)
-    for (const nodeId of segment.nodeIds) setNodeStatus(nodeId, 'loading')
-
-    try {
-      const res = await fetch('/api/simulate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ graph: { nodes, edges }, kondisiAwal, fromSyncId: currentSyncId, state }),
-      })
-      if (!res.ok) {
-        const detail = await res.json().catch(() => null)
-        throw new Error(detail?.error ?? `Call to /api/simulate failed (${res.status})`)
-      }
-      const parsed = SegmentResponseSchema.parse(await res.json())
-
-      for (const pn of parsed.perNode) setNodeStatus(pn.nodeId, pn.status)
-
-      state = appendLedger(applyDelta(state, parsed.stateBaru), parsed.kejadianPenting)
-      pushResult(
-        {
-          segmentId: segment.id,
-          narasiSegmen: parsed.narasiSegmen,
-          narasiGap: parsed.narasiGap,
-          perNode: parsed.perNode,
-        },
-        state
-      )
-
-      if (!state.hidup) return finishRun()
-    } catch (e) {
-      for (const nodeId of segment.nodeIds) setNodeStatus(nodeId, 'gagal')
-      fail(e instanceof Error ? e.message : 'Segment failed to run')
-      return
-    }
-
-    const syncNode = byId.get(segment.syncEndId)!
-    if (syncNode.kind === 'end') break
-    if (syncNode.kind === 'merge') {
-      currentSyncId = syncNode.id
-      continue
-    }
-
-    // syncNode.kind === 'if': satu call tambahan buat mutusin cabang mana yang kejadian.
-    setNodeStatus(syncNode.id, 'loading')
-    try {
-      const res = await fetch('/api/branch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ graph: { nodes, edges }, kondisiAwal, state, ifNodeId: syncNode.id }),
-      })
-      if (!res.ok) {
-        const detail = await res.json().catch(() => null)
-        throw new Error(detail?.error ?? `Call to /api/branch failed (${res.status})`)
-      }
-      const parsed = IfResponseSchema.parse(await res.json())
-      const chosenEdge = edges.find((e) => e.id === parsed.edgeId && e.from === syncNode.id)
-      if (!chosenEdge) throw new Error('LLM picked a branch that does not exist')
-
-      setNodeStatus(syncNode.id, 'sukses')
-      markSkipped(syncNode.id, chosenEdge.id, nodes, edges, setNodeStatus)
-      currentSyncId = chosenEdge.to
-    } catch (e) {
-      setNodeStatus(syncNode.id, 'gagal')
-      fail(e instanceof Error ? e.message : 'Branch decision failed')
-      return
-    }
-  }
-
-  finishRun()
 }
 
 export async function fetchSummary(kondisiAwal: KondisiAwal, stateAkhir: LifeState): Promise<void> {
-  const { requestSummary, setSummary, failSummary } = useRunStore.getState()
-  requestSummary()
+  const run = useRunStore.getState()
+  if (run.running || run.summaryLoading) return
+  const language = useLocaleStore.getState().language
+  const initial = run.initialConditions ?? kondisiAwal
+  run.requestSummary()
   try {
-    const res = await fetch('/api/summary', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kondisiAwal, stateAkhir }),
-    })
-    if (!res.ok) {
-      const detail = await res.json().catch(() => null)
-      throw new Error(detail?.error ?? `Call to /api/summary failed (${res.status})`)
-    }
+    const res = await fetch('/api/summary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kondisiAwal: initial, stateAkhir, language }) })
+    if (!res.ok) throw new Error('Summary request failed')
     const summary = RingkasanResponseSchema.parse(await res.json())
-    setSummary(summary)
-    useHistoryStore.getState().addEntry({ kondisiAwal, stateAkhir, summary })
-  } catch (e) {
-    failSummary(e instanceof Error ? e.message : 'Summary failed to generate')
+    run.setSummary(summary)
+    useHistoryStore.getState().addEntry({ kondisiAwal: initial, stateAkhir, summary })
+  } catch {
+    run.failSummary(translate(language, 'Something went wrong. Your progress is saved; try again.'))
   }
 }

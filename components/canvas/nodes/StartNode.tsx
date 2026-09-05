@@ -1,7 +1,9 @@
+import { useT } from '@/lib/locale'
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react'
 import type { LifeFlowNodeData } from './shared'
 
 export function StartNode({ data }: NodeProps<Node<LifeFlowNodeData>>) {
+  const t = useT()
   const hasIssue = data.issues.length > 0
   return (
     <div
@@ -10,7 +12,7 @@ export function StartNode({ data }: NodeProps<Node<LifeFlowNodeData>>) {
       }`}
       title={data.issues.join('\n')}
     >
-      Intake{data.umurSelesai !== undefined ? ` · age ${data.umurSelesai}` : ''}
+      {t("Intake")}{data.umurSelesai !== undefined ? ` / ${t("age")} ${data.umurSelesai}` : ''}
       <Handle type="source" position={Position.Right} className="!bg-paper" />
     </div>
   )

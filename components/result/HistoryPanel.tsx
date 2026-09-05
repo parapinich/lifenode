@@ -1,14 +1,20 @@
 'use client'
 
-import { useState } from 'react'
+import { useT } from '@/lib/locale'
+import { useEffect, useRef, useState } from 'react'
 import { X, Trash2 } from 'lucide-react'
 import { useHistoryStore, type HistoryEntry } from '@/lib/historyStore'
 import { LifeCard } from './LifeCard'
 
 export function HistoryPanel({ onClose }: { onClose: () => void }) {
+  const t = useT()
   const entries = useHistoryStore((s) => s.entries)
   const removeEntry = useHistoryStore((s) => s.removeEntry)
   const [viewing, setViewing] = useState<HistoryEntry | null>(null)
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  useEffect(() => {
+    if (!viewing) dialogRef.current?.showModal()
+  }, [viewing])
 
   if (viewing) {
     return (
@@ -22,17 +28,17 @@ export function HistoryPanel({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4">
-      <div className="flex max-h-[80vh] w-full max-w-md flex-col rounded-2xl border-2 border-ink bg-paper-raised p-4">
+    <dialog ref={dialogRef} className="case-dialog" aria-label={t("Case history")} onCancel={onClose}>
+      <div className="case-document flex max-h-[80vh] flex-col">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold text-ink">Case History</h2>
-          <button onClick={onClose} className="text-ink-soft hover:text-ink" title="Close">
+          <h2 className="font-display text-lg font-semibold text-ink">{t("Case History")}</h2>
+          <button onClick={onClose} className="text-ink-soft hover:text-ink" title={t("Close")}>
             <X size={16} />
           </button>
         </div>
 
         {entries.length === 0 ? (
-          <p className="font-mono text-xs text-ink-soft">No closed cases yet — run a life to file one.</p>
+          <p className="font-mono text-xs text-ink-soft">{t('No closed cases yet.')}</p>
         ) : (
           <ul className="flex flex-col gap-2 overflow-y-auto">
             {entries.map((e) => (
@@ -48,8 +54,8 @@ export function HistoryPanel({ onClose }: { onClose: () => void }) {
                 </button>
                 <button
                   onClick={() => removeEntry(e.id)}
-                  className="text-ink-soft opacity-0 hover:text-stamp-red group-hover:opacity-100"
-                  title="Delete from history"
+                  className="p-2 text-ink-soft hover:text-stamp-red"
+                  title={t("Delete from history")}
                 >
                   <Trash2 size={14} />
                 </button>
@@ -58,6 +64,6 @@ export function HistoryPanel({ onClose }: { onClose: () => void }) {
           </ul>
         )}
       </div>
-    </div>
+    </dialog>
   )
 }
