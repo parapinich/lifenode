@@ -35,6 +35,14 @@ it('keeps parallel decision cards and waits from overlapping after layout', () =
 })
 
 describe('graf linear', () => {
+  it('does not reserve empty category bands for a single-lane life', () => {
+    const graph: Graph = {
+      nodes: [node({ id: 'start', kind: 'start' }), node({ id: 'rest', kind: 'aksi', lane: 'kesehatan', label: 'Rest' }), node({ id: 'end', kind: 'end' })],
+      edges: [edge('a', 'start', 'rest'), edge('b', 'rest', 'end')],
+    }
+    const positions = Object.values(autoLayout(graph, 20))
+    expect(new Set(positions.map((p) => p.y)).size).toBe(1)
+  })
   const graph: Graph = {
     nodes: [
       node({ id: 'start', kind: 'start' }),

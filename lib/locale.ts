@@ -2,6 +2,10 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 export type Language = 'en' | 'id'
+
+export function formatMoney(value: number, language: Language): string {
+  return `${value < 0 ? '-' : ''}${language === 'id' ? 'Rp' : '$'}${Math.abs(value).toLocaleString(language === 'id' ? 'id-ID' : 'en-US')}`
+}
 export const useLocaleStore = create<{ language: Language; setLanguage: (language: Language) => void }>()(
   persist((set) => ({ language: 'en', setLanguage: (language) => set({ language }) }), { name: 'lifenode-language' })
 )
@@ -11,7 +15,7 @@ const ID: Record<string, string> = {
   'Case history': 'Riwayat hidup', 'Case History': 'Riwayat hidup',
   'Starting conditions': 'Kondisi awal', '01 / The subject': '01 / Pemeran utama',
   'Initial conditions': 'Kondisi awal', 'Age': 'Usia', 'age': 'usia',
-  'Age at intake': 'Usia awal', 'Starting funds / Rp': 'Uang awal / Rp',
+  'Age at intake': 'Usia awal', 'Starting funds / $': 'Uang awal / Rp',
   'Background note': 'Latar belakang', 'An ordinary person. For now.': 'Orang biasa. Untuk sementara.',
   'Randomize background note': 'Acak latar belakang', 'Life plan': 'Rencana hidup',
   '02 / The plan': '02 / Rencana', 'A life, pending.': 'Hidup belum selesai.',
@@ -28,7 +32,7 @@ const ID: Record<string, string> = {
   'Case interrupted': 'Babak terhenti', 'Outcome on record': 'Hasil tercatat', 'Draft / not yet lived': 'Rencana / belum dijalani',
   'decisions': 'keputusan', 'connections': 'hubungan', '03 / The consequences': '03 / Konsekuensi',
   'Close case file': 'Tutup catatan hidup', 'Resources remaining': 'Kondisi sekarang', 'Resources on arrival': 'Modal awal',
-  'Deceased': 'Meninggal', 'Funds / Rp': 'Uang / Rp', 'Energy': 'Energi', 'Reputation': 'Reputasi', 'Happiness': 'Kebahagiaan',
+  'Deceased': 'Meninggal', 'Energy': 'Energi', 'Reputation': 'Reputasi', 'Happiness': 'Kebahagiaan',
   'Record of events': 'Catatan kejadian', 'Reality is deliberating.': 'Semesta sedang berpikir.',
   'Nothing has happened. Yet.': 'Belum terjadi apa-apa.', 'The first consequences are pending.': 'Konsekuensi pertama segera tiba.',
   'All plans look reasonable before the consequences arrive.': 'Semua rencana terdengar masuk akal sebelum konsekuensinya datang.',

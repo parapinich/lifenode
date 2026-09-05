@@ -1,6 +1,6 @@
 'use client'
 
-import { useT, useLocaleStore } from '@/lib/locale'
+import { useT, useLocaleStore, formatMoney } from '@/lib/locale'
 import dynamic from 'next/dynamic'
 import { ReactFlowProvider } from '@xyflow/react'
 import { useEffect, useMemo, useState } from 'react'
@@ -22,7 +22,7 @@ const Board = dynamic(() => import('@/components/canvas/Board').then((m) => m.Bo
   loading: () => <div className="board-loading" role="status"><LoaderCircle className="animate-spin" aria-label="Lifenode" /></div>,
 })
 const STATS = [
-  { key: 'umur', label: 'Age' }, { key: 'uang', label: 'Funds / Rp' },
+  { key: 'umur', label: 'Age' }, { key: 'uang', label: 'Funds' },
   { key: 'energi', label: 'Energy' }, { key: 'reputasi', label: 'Reputation' },
   { key: 'kebahagiaan', label: 'Happiness' },
 ] as const
@@ -67,7 +67,7 @@ export default function Home() {
       <section className="intake-strip" aria-label={t("Starting conditions")}>
         <div className="intake-label"><span className="eyebrow">{t("01 / The subject")}</span><strong>{t("Initial conditions")}</strong></div>
         <label><span>{t("Age")}</span><input aria-label={t("Age at intake")} type="number" min={0} max={100} value={kondisiAwal.umur} disabled={running || !!lifeState} onChange={(e) => setKondisiAwal({ umur: Number(e.target.value) })} /></label>
-        <label className="funds-input"><span>{t("Starting funds / Rp")}</span><input type="number" value={kondisiAwal.uang} disabled={running || !!lifeState} onChange={(e) => setKondisiAwal({ uang: Number(e.target.value) })} /></label>
+        <label className="funds-input"><span>{t("Starting funds / $")}</span><input type="number" lang={language === 'id' ? 'id-ID' : 'en-US'} value={kondisiAwal.uang} disabled={running || !!lifeState} onChange={(e) => setKondisiAwal({ uang: Number(e.target.value) })} /></label>
         <label className="background-input"><span>{t("Background note")}</span><div><input type="text" maxLength={140} placeholder={t("An ordinary person. For now.")} value={kondisiAwal.latarBelakang} disabled={running || !!lifeState} onChange={(e) => setKondisiAwal({ latarBelakang: e.target.value })} /><button type="button" className="icon-button" title={t("Randomize background note")} aria-label={t("Randomize background note")} disabled={running || !!lifeState} onClick={() => setKondisiAwal({ latarBelakang: randomBackstory(language) })}><Dices size={17} /></button></div></label>
       </section>
       <ReactFlowProvider>
@@ -105,7 +105,7 @@ export default function Home() {
           <aside className={`case-panel ${showResults ? 'is-open' : ''}`} aria-label={t("Case file")}>
             <div className="panel-heading"><div><span className="eyebrow">{t("03 / The consequences")}</span><h2>{t("Case file")}</h2></div><button className="icon-button mobile-panel-button" aria-label={t("Close case file")} title={t("Close case file")} onClick={() => setShowResults(false)}><X size={17} /></button></div>
             <div className="resource-heading"><span className="eyebrow">{lifeState ? t("Resources remaining") : t("Resources on arrival")}</span>{lifeState && !lifeState.hidup && <span className="text-stamp-red">{t("Deceased")}</span>}</div>
-            <dl className="resource-ledger">{STATS.map(({ key, label }) => <div key={key}><dt>{t(label)}</dt><dd>{stats[key].toLocaleString('id-ID')}{key !== 'umur' && key !== 'uang' && <meter min={0} max={100} value={stats[key]} aria-label={t(label)} />}</dd></div>)}</dl>
+            <dl className="resource-ledger">{STATS.map(({ key, label }) => <div key={key}><dt>{t(label)}</dt><dd>{key === 'uang' ? formatMoney(stats[key], language) : stats[key].toLocaleString(language === 'id' ? 'id-ID' : 'en-US')}{key !== 'umur' && key !== 'uang' && <meter min={0} max={100} value={stats[key]} aria-label={t(label)} />}</dd></div>)}</dl>
             <div className="record-heading"><span className="eyebrow">{t("Record of events")}</span><span className="record-count">{String(results.length).padStart(2, '0')}</span></div>
             <div className="case-events" aria-live="polite" aria-busy={running}>
               {results.length === 0 ? <div className="empty-record"><FileText size={30} strokeWidth={1} /><h3>{running ? t("Reality is deliberating.") : t("Nothing has happened. Yet.")}</h3><p>{running ? t("The first consequences are pending.") : t("All plans look reasonable before the consequences arrive.")}</p></div> : results.map((r, i) => <SegmentResult key={r.segmentId} result={r} index={i} />)}

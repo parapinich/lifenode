@@ -3,7 +3,7 @@ import { computeGraph, computeOneSegment, executionGraph, validateGraph } from '
 import { nextExample } from './examples'
 import { useGraphStore } from './store'
 import { useRunStore } from './runStore'
-import { useLocaleStore, translate } from './locale'
+import { useLocaleStore, translate, formatMoney } from './locale'
 import { executeGraph } from './runExecute'
 import { narrativePrompt, SYSTEM_PROMPT } from './prompts'
 import type { Graph } from './schema'
@@ -14,6 +14,42 @@ beforeEach(() => {
   useGraphStore.setState({ nodes: [{ id: 'start', kind: 'start', x: 0, y: 0 }, { id: 'end', kind: 'end', x: 700, y: 0 }], edges: [], past: [], future: [], kondisiAwal: { umur: 20, uang: 1000, latarBelakang: 'A quiet life' } })
 })
 afterEach(() => vi.unstubAllGlobals())
+
+it('formats money without converting stored amounts', () => {
+  for (const [value, en, id] of [[100000, '$100,000', 'Rp100.000'], [0, '$0', 'Rp0'], [-1250.5, '-$1,250.5', '-Rp1.250,5']] as const) {
+    expect(formatMoney(value, 'en')).toBe(en)
+    expect(formatMoney(value, 'id')).toBe(id)
+  }
+  const funds = useGraphStore.getState().kondisiAwal.uang
+  useLocaleStore.getState().setLanguage('id')
+  expect(useGraphStore.getState().kondisiAwal.uang).toBe(funds)
+  expect(narrativePrompt('', 'en')).toContain('dollars ($)')
+  expect(narrativePrompt('', 'id')).toContain('Rupiah (Rp)')
+})
+
+it('deletes a group and its connections in one undo while retaining endpoints', () => {
+  const store = useGraphStore.getState()
+  store.addDecision('Work', 'karir')
+  const first = useGraphStore.getState().nodes.find((n) => n.kind === 'aksi')!
+  store.addDecision('Rest', 'kesehatan', first.id, 'after')
+  const before = useGraphStore.getState()
+  store.removeElements(before.nodes.map((n) => n.id), before.edges.map((e) => e.id))
+  expect(useGraphStore.getState().nodes.map((n) => n.id)).toEqual(['start', 'end'])
+  expect(useGraphStore.getState().edges).toEqual([])
+  expect(useGraphStore.getState().past.length).toBe(before.past.length + 1)
+  store.undo()
+  expect(useGraphStore.getState().nodes).toEqual(before.nodes)
+  expect(useGraphStore.getState().edges).toEqual(before.edges)
+  useRunStore.setState({ lockedNodeIds: [first.id] })
+  store.removeElements([first.id], [before.edges[0].id])
+  expect(useGraphStore.getState().nodes).toContainEqual(first)
+  expect(useGraphStore.getState().edges).toContainEqual(before.edges[0])
+  useRunStore.setState({ running: true })
+  const busy = useGraphStore.getState()
+  store.removeElements(busy.nodes.map((n) => n.id), busy.edges.map((e) => e.id))
+  expect(useGraphStore.getState().nodes).toEqual(busy.nodes)
+  expect(useGraphStore.getState().edges).toEqual(busy.edges)
+})
 
 it('rotates bilingual examples without immediate repeats; every graph is playable', () => {
   for (const language of ['en', 'id'] as const) {

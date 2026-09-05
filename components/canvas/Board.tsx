@@ -8,6 +8,7 @@ import {
   Background,
   BackgroundVariant,
   Controls,
+  MiniMap,
   SelectionMode,
   useReactFlow,
   type Connection,
@@ -28,6 +29,7 @@ import { EndNode } from './nodes/EndNode'
 import { DeletableEdge } from './edges/DeletableEdge'
 import type { LifeFlowNodeData } from './nodes/shared'
 import type { PaletteDragPayload } from './NodePalette'
+import type { Lane } from '@/lib/schema'
 
 const nodeTypes = {
   start: StartNode,
@@ -51,12 +53,22 @@ export function Board() {
   const addTungguNode = useGraphStore((s) => s.addTungguNode)
   const addIfNode = useGraphStore((s) => s.addIfNode)
   const addMergeNode = useGraphStore((s) => s.addMergeNode)
-  const removeNode = useGraphStore((s) => s.removeNode)
+  const removeElements = useGraphStore((s) => s.removeElements)
+  const lockedNodeIds = useRunStore((s) => s.lockedNodeIds)
   const nodeStatus = useRunStore((s) => s.nodeStatus)
   const running = useRunStore((s) => s.running)
   const layoutVersion = useGraphStore((s) => s.layoutVersion)
   const { screenToFlowPosition, fitView } = useReactFlow()
   const boardRef = useRef<HTMLDivElement>(null)
+  const [touchMode, setTouchMode] = useState(false)
+
+  useEffect(() => {
+    const media = window.matchMedia('(pointer: coarse)')
+    const update = () => setTouchMode(media.matches)
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
 
   useEffect(() => {
     let previousWidth: number | undefined
@@ -97,6 +109,7 @@ export function Board() {
   }, [nodes, edges, kondisiAwal.umur])
 
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set())
+  const [measured, setMeasured] = useState<Record<string, { width: number; height: number }>>({})
 
   const rfNodes: Node<LifeFlowNodeData>[] = useMemo(
     () =>
@@ -104,7 +117,9 @@ export function Board() {
         id: n.id,
         type: n.kind,
         position: { x: n.x, y: n.y },
+        measured: measured[n.id],
         selected: selectedNodeIds.has(n.id),
+        deletable: n.kind !== 'start' && n.kind !== 'end' && !lockedNodeIds.includes(n.id),
         data: {
           ...n,
           umurMulai: timing?.[n.id]?.umurMulai,
@@ -113,7 +128,7 @@ export function Board() {
           runStatus: nodeStatus[n.id],
         },
       })),
-    [nodes, timing, issuesByNode, nodeStatus, selectedNodeIds]
+    [nodes, timing, issuesByNode, nodeStatus, selectedNodeIds, lockedNodeIds, measured]
   )
 
   const [selectedEdgeIds, setSelectedEdgeIds] = useState<Set<string>>(new Set())
@@ -162,6 +177,9 @@ export function Board() {
       for (const change of changes) {
         if (change.type === 'position' && change.position) {
           moveNode(change.id, change.position.x, change.position.y)
+        } else if (change.type === 'dimensions' && change.dimensions) {
+          const dimensions = change.dimensions
+          setMeasured((prev) => prev[change.id]?.width === dimensions.width && prev[change.id]?.height === dimensions.height ? prev : { ...prev, [change.id]: dimensions })
         } else if (change.type === 'select') {
           setSelectedNodeIds((prev) => {
             const next = new Set(prev)
@@ -169,13 +187,10 @@ export function Board() {
             else next.delete(change.id)
             return next
           })
-        } else if (change.type === 'remove') {
-          if (running) continue
-          removeNode(change.id)
         }
       }
     },
-    [moveNode, removeNode, running]
+    [moveNode]
   )
 
   const onConnect = useCallback(
@@ -214,9 +229,13 @@ export function Board() {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeDragStart={beginNodeDrag}
+        onSelectionDragStart={beginNodeDrag}
+        onDelete={({ nodes, edges }) => removeElements(nodes.map((n) => n.id), edges.map((e) => e.id))}
         nodesConnectable={!running}
-        panOnDrag={[0, 1]}
-        selectionOnDrag={false}
+        panOnDrag={touchMode ? true : [1]}
+        selectionOnDrag={!touchMode}
+        autoPanOnSelection={false}
+        selectionKeyCode={null}
         selectionMode={SelectionMode.Partial}
         deleteKeyCode={['Backspace', 'Delete']}
         fitView
@@ -225,6 +244,7 @@ export function Board() {
       >
         <Background variant={BackgroundVariant.Dots} color="#bec2bd" gap={22} size={1} bgColor="#e9ece7" />
         <Controls />
+        {nodes.length > 8 && <MiniMap className="life-minimap" pannable zoomable ariaLabel={language === 'id' ? 'Peta hidup' : 'Life map'} nodeColor={(node) => ({ karir: '#588369', relasi: '#ae6984', kesehatan: '#548f9a', chaos: '#c39b40' })[node.data.lane as Lane] ?? '#7b8179'} />}
       </ReactFlow>
     </div>
   )

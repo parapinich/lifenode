@@ -467,7 +467,7 @@ export function segmentCabang(
 }
 
 const LAYOUT_LANE_ORDER: Lane[] = ['karir', 'relasi', 'kesehatan', 'chaos']
-const LAYOUT_PX_PER_YEAR = 70
+const LAYOUT_PX_PER_YEAR = 40
 const LAYOUT_ROW_HEIGHT = 340
 const LAYOUT_MARGIN_X = 60
 const LAYOUT_MARGIN_Y = 60
@@ -486,7 +486,8 @@ const LAYOUT_MIN_GAP_X = 260
  */
 export function autoLayout(graph: Graph, umurAwal: number): Record<string, { x: number; y: number }> {
   const { timing, order } = computeGraph(graph, umurAwal)
-  const laneBandsHeight = LAYOUT_LANE_ORDER.length * LAYOUT_ROW_HEIGHT
+  const lanes = LAYOUT_LANE_ORDER.filter((lane) => graph.nodes.some((n) => n.kind === 'aksi' && n.lane === lane))
+  const laneBandsHeight = Math.max(1, lanes.length) * LAYOUT_ROW_HEIGHT
   const byId = new Map(graph.nodes.map((n) => [n.id, n]))
   const incoming = new Map<string, Edge[]>()
   for (const n of graph.nodes) incoming.set(n.id, [])
@@ -505,7 +506,7 @@ export function autoLayout(graph: Graph, umurAwal: number): Record<string, { x: 
     const lane = byId.get(n.id)?.lane
     let y =
       n.kind === 'aksi' && lane
-        ? LAYOUT_MARGIN_Y + LAYOUT_LANE_ORDER.indexOf(lane) * LAYOUT_ROW_HEIGHT
+        ? LAYOUT_MARGIN_Y + lanes.indexOf(lane) * LAYOUT_ROW_HEIGHT
         : LAYOUT_MARGIN_Y + laneBandsHeight / 2 - LAYOUT_ROW_HEIGHT / 2
     // ponytail: O(n²) placement for small life graphs; use a spatial index if boards grow large.
     while (Object.values(positions).some((p) => Math.abs(p.x - x[n.id]) < LAYOUT_MIN_GAP_X && Math.abs(p.y - y) < LAYOUT_ROW_HEIGHT)) {

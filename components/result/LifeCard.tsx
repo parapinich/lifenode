@@ -1,6 +1,6 @@
 'use client'
 
-import { useT } from '@/lib/locale'
+import { useT, useLocaleStore, formatMoney } from '@/lib/locale'
 import { useEffect, useRef, useState } from 'react'
 import { toPng } from 'html-to-image'
 import { Download, Share2, X } from 'lucide-react'
@@ -14,11 +14,6 @@ const STAT_ROWS: { key: keyof LifeState; label: string }[] = [
   { key: 'kebahagiaan', label: 'Happiness' },
 ]
 
-function formatRupiah(n: number): string {
-  const sign = n < 0 ? '-' : ''
-  return `${sign}Rp${Math.abs(n).toLocaleString('id-ID')}`
-}
-
 export function LifeCard({
   summary,
   kondisiAwal,
@@ -31,6 +26,7 @@ export function LifeCard({
   onClose: () => void
 }) {
   const t = useT()
+  const language = useLocaleStore((s) => s.language)
   const cardRef = useRef<HTMLDivElement>(null)
   const dialogRef = useRef<HTMLDialogElement>(null)
   useEffect(() => { dialogRef.current?.showModal() }, [])
@@ -103,8 +99,8 @@ export function LifeCard({
             <div className="col-span-2 flex justify-between">
               <span className="text-ink-soft">{t("Funds")}</span>
               <span className="font-semibold">
-                {formatRupiah(stateAkhir.uang)} ({uangDelta >= 0 ? '+' : ''}
-                {formatRupiah(uangDelta)})
+                {formatMoney(stateAkhir.uang, language)} ({uangDelta >= 0 ? '+' : ''}
+                {formatMoney(uangDelta, language)})
               </span>
             </div>
           </div>

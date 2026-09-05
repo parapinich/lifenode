@@ -149,6 +149,9 @@ button svg { flex-shrink: 0; }
 .execute-button:disabled { background: #d7dbd3; color: #626a5d; opacity: 1; }
 .canvas-surface { position: relative; flex: 1; min-height: 0; }
 .life-board, .board-loading { width: 100%; height: 100%; }
+.life-board { --xy-selection-background-color: #3b82f626; --xy-selection-border: 1px solid #3b82f6; }
+.life-minimap { border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+@media (max-width: 767px) { .life-minimap { display: none; } }
 .board-loading { display: grid; place-items: center; font-family: var(--font-mono); font-size: 12px; }
 .case-alert { background: #f9eee9; color: #973a2e; border-bottom: 1px solid #e5c8bd; padding: 8px 20px; font-size: 11px; max-height: 130px; overflow-y: auto; }
 .case-alert p { margin: 6px 0; }
@@ -187,7 +190,7 @@ meter::-moz-meter-bar { background: #768967; }
 .life-board .react-flow__node-aksi > div:has(.text-lane-relasi) { border-left-color: var(--lane-relasi); }
 .life-board .react-flow__node-aksi > div:has(.text-lane-kesehatan) { border-left-color: var(--lane-kesehatan); }
 .life-board .react-flow__node-aksi > div:has(.text-lane-chaos) { border-left-color: var(--lane-chaos); }
-.life-board .react-flow__node.selected > div { outline: 2px solid var(--lane-karir); outline-offset: 4px; }
+.life-board .react-flow__node.selected > div { outline: 2px solid #3b82f6; outline-offset: 4px; }
 .life-board .react-flow__handle { width: 10px; height: 10px; border: 2px solid var(--paper-raised); }
 .life-board .react-flow__controls { box-shadow: none; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
 .life-board .react-flow__controls-button { background: var(--paper-raised); border-color: var(--line); width: 32px; height: 32px; }

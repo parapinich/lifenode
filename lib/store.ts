@@ -18,6 +18,7 @@ interface GraphStore extends GraphSnapshot {
   nextChapter: (label: string, lane: Lane) => void
   updateNode: (id: string, patch: Partial<LifeNode>) => void
   removeNode: (id: string) => void
+  removeElements: (nodeIds: string[], edgeIds?: string[]) => void
   moveNode: (id: string, x: number, y: number) => void
   beginNodeDrag: () => void
   addEdge: (from: string, to: string) => void
@@ -56,10 +57,17 @@ export const useGraphStore = create<GraphStore>()(persist((set, get) => {
     },
     moveNode: (id, x, y) => set((s) => ({ nodes: s.nodes.map((n) => n.id === id ? { ...n, x, y } : n) })),
     beginNodeDrag: snapshot,
-    removeNode: (id) => {
-      if (busy() || isNodeLocked(id)) return
+    removeNode: (id) => get().removeElements([id]),
+    removeElements: (nodeIds, edgeIds = []) => {
+      if (busy()) return
+      const { nodes, edges } = get()
+      const requested = new Set(nodeIds)
+      const removed = new Set(nodes.filter((n) => requested.has(n.id) && n.kind !== 'start' && n.kind !== 'end' && !isNodeLocked(n.id) && !edges.some((e) => (e.from === n.id || e.to === n.id) && edgeLocked(e))).map((n) => n.id))
+      const selectedEdges = new Set(edgeIds)
+      const nextEdges = edges.filter((e) => !removed.has(e.from) && !removed.has(e.to) && !(selectedEdges.has(e.id) && !edgeLocked(e)))
+      if (!removed.size && nextEdges.length === edges.length) return
       snapshot()
-      set((s) => ({ nodes: s.nodes.filter((n) => n.id !== id), edges: s.edges.filter((e) => e.from !== id && e.to !== id) }))
+      set({ nodes: nodes.filter((n) => !removed.has(n.id)), edges: nextEdges })
     },
     addEdge: (from, to) => {
       if (busy() || edgeLocked({ id: '', from, to }) || get().edges.some((e) => e.from === from && e.to === to)) return
@@ -72,10 +80,7 @@ export const useGraphStore = create<GraphStore>()(persist((set, get) => {
       set((s) => ({ edges: s.edges.map((e) => e.id === id ? { ...e, ...patch } : e) }))
     },
     removeEdge: (id) => {
-      const edge = get().edges.find((e) => e.id === id)
-      if (busy() || !edge || edgeLocked(edge)) return
-      snapshot()
-      set((s) => ({ edges: s.edges.filter((e) => e.id !== id) }))
+      get().removeElements([], [id])
     },
     setKondisiAwal: (patch) => {
       if (busy() || useRunStore.getState().lifeState) return

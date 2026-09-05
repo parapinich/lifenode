@@ -103,7 +103,7 @@ export function AksiNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
 
       <div className="mt-2 flex items-center justify-between border-t border-dashed border-line pt-1.5">
         {data.umurMulai !== undefined ? (
-          <span className="font-mono text-[10px] text-ink-soft">
+          <span className="node-age font-mono text-xs font-semibold text-ink">
             {t("age")} {data.umurMulai} &rarr; {data.umurSelesai}
           </span>
         ) : (
