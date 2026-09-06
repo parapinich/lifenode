@@ -1,9 +1,10 @@
+import { useEffect, useState } from 'react'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Death, MortalityClock, PendingRisk } from './mortality'
 import type { KondisiAwal, LifeState, RingkasanResponse, StatusNode, RandomEvent } from './schema'
 
-export interface EventRecord { roll: number; data?: RandomEvent; choice?: number; skipped?: boolean; error?: boolean }
+export interface EventRecord { roll: number; data?: RandomEvent; choice?: number; skipped?: boolean; error?: string }
 
 export type NodeRunStatus = 'idle' | 'loading' | StatusNode | 'skipped'
 
@@ -40,6 +41,9 @@ interface RunStore {
   lifeState: LifeState | null
   results: SegmentResultView[]
   error: string | null
+  // Epoch ms until which Groq asked us to wait. Absolute, not a duration, so a
+  // page reload doesn't resurrect a countdown that already expired.
+  retryUntil: number | null
   summary: RingkasanResponse | null
   summaryLoading: boolean
   summaryError: string | null
@@ -73,12 +77,13 @@ export const useRunStore = create<RunStore>()(persist((set) => ({
   lifeState: null,
   results: [],
   error: null,
+  retryUntil: null,
   summary: null,
   summaryLoading: false,
   summaryError: null,
 
   startRun: (initial) =>
-    set({ running: true, nodeStatus: {}, results: [], error: null, initialState: initial, lifeState: initial, summary: null, summaryError: null }),
+    set({ running: true, nodeStatus: {}, results: [], error: null, retryUntil: null, initialState: initial, lifeState: initial, summary: null, summaryError: null }),
 
   setNodeStatus: (id, status) => set((s) => ({ nodeStatus: { ...s.nodeStatus, [id]: status } })),
 
@@ -89,14 +94,32 @@ export const useRunStore = create<RunStore>()(persist((set) => ({
 
   fail: (message) => set({ running: false, error: message }),
 
-  requestSummary: () => set({ summaryLoading: true, summaryError: null }),
+  requestSummary: () => set({ summaryLoading: true, summaryError: null, retryUntil: null }),
   setSummary: (summary) => set({ summary, summaryLoading: false }),
   failSummary: (message) => set({ summaryLoading: false, summaryError: message }),
   closeSummary: () => set({ summary: null, summaryError: null }),
-  reset: () => set({ mortalityClock: null, pendingRisk: null, death: null, events: {}, lastEventAge: null, running: false, nextSyncId: null, chapterComplete: false, lockedNodeIds: [], selectedBranches: {}, branchNarratives: {}, initialConditions: null, nodeStatus: {}, initialState: null, lifeState: null, results: [], error: null, summary: null, summaryLoading: false, summaryError: null }),
+  reset: () => set({ mortalityClock: null, pendingRisk: null, death: null, events: {}, lastEventAge: null, running: false, nextSyncId: null, chapterComplete: false, lockedNodeIds: [], selectedBranches: {}, branchNarratives: {}, initialConditions: null, nodeStatus: {}, initialState: null, lifeState: null, results: [], error: null, retryUntil: null, summary: null, summaryLoading: false, summaryError: null }),
 }), {
   name: 'lifenode-run',
   partialize: (s) => ({ ...s, running: false, summaryLoading: false, nodeStatus: Object.fromEntries(Object.entries(s.nodeStatus).map(([id, status]) => [id, status === 'loading' ? 'idle' as const : status])) }),
 }))
 
 export function isNodeLocked(id: string): boolean { return useRunStore.getState().lockedNodeIds.includes(id) }
+
+// Seconds left on Groq's rate-limit window, ticking down to zero. Every retry
+// control reads this so none of them can hammer the limit back open.
+export function useCooldown(): number {
+  const retryUntil = useRunStore((s) => s.retryUntil)
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!retryUntil) return
+    // retryUntil is left behind once it lapses, so the ticker has to stop
+    // itself — otherwise it re-renders the page every second all session.
+    const timer = setInterval(() => {
+      setNow(Date.now())
+      if (Date.now() >= retryUntil) clearInterval(timer)
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [retryUntil])
+  return retryUntil ? Math.max(0, Math.ceil((retryUntil - now) / 1000)) : 0
+}

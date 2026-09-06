@@ -1,6 +1,7 @@
 import { RandomEventSchema, type LifeState } from './schema'
 import { useRunStore } from './runStore'
 import { useGraphStore } from './store'
+import { post, retryUntilFrom } from './apiPost'
 import { translate, useLocaleStore } from './locale'
 
 export const EVENT_CHANCE = 0.75
@@ -14,18 +15,20 @@ export async function prepareEvent(id: string): Promise<void> {
   if (!run.lifeState || run.nextSyncId !== id) return
   const existing = run.events[id]
   if (existing?.data || existing?.skipped || existing?.choice !== undefined) return
+  // Retrying inside the rate-limit window just earns another 429 and keeps the
+  // window alive — every caller has to wait it out, not only the button.
+  if (run.retryUntil && run.retryUntil > Date.now()) return
   const roll = existing?.roll ?? Math.random()
   const skipped = !eventOccurs(roll, run.lifeState.umur, run.lastEventAge)
   useRunStore.setState((s) => ({ events: { ...s.events, [id]: { roll, skipped } } }))
   if (skipped) return
   const { nodes, edges, kondisiAwal } = useGraphStore.getState()
   try {
-    const response = await fetch('/api/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ graph: { nodes, edges }, kondisiAwal, state: run.lifeState, choices: run.selectedBranches, eventNodeId: id, seed: roll, language: useLocaleStore.getState().language }) })
-    if (!response.ok) throw new Error('Event request failed')
-    const data = RandomEventSchema.parse(await response.json())
+    const data = RandomEventSchema.parse(await post('Random event', '/api/event', { graph: { nodes, edges }, kondisiAwal, state: run.lifeState, choices: run.selectedBranches, eventNodeId: id, seed: roll, language: useLocaleStore.getState().language }))
     useRunStore.setState((s) => ({ events: { ...s.events, [id]: { roll, data } }, lastEventAge: run.lifeState!.umur }))
-  } catch {
-    useRunStore.setState((s) => ({ events: { ...s.events, [id]: { roll, error: true } } }))
+  } catch (e) {
+    const message = e instanceof Error ? e.message : translate(useLocaleStore.getState().language, 'Event unavailable. Retry or continue without it.')
+    useRunStore.setState((s) => ({ events: { ...s.events, [id]: { roll, error: message } }, retryUntil: retryUntilFrom(e) }))
   }
 }
 
@@ -35,7 +38,7 @@ export function respondToEvent(id: string, choice: number | 'skip'): boolean {
   if (run.running || run.summaryLoading || run.nextSyncId !== id || !run.lifeState?.hidup || !record || record.skipped || record.choice !== undefined) return false
   if (choice === 'skip') {
     if (!record.error) return false
-    useRunStore.setState((s) => ({ events: { ...s.events, [id]: { ...record, skipped: true, error: false } } }))
+    useRunStore.setState((s) => ({ events: { ...s.events, [id]: { ...record, skipped: true, error: undefined } } }))
     return true
   }
   const option = record.data?.options[choice]

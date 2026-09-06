@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { GraphSchema, IfRequestSchema, IfResponseSchema, KondisiAwalSchema, LifeStateSchema } from '@/lib/schema'
 import { computeGraph, executionGraph, validateGraph, GraphCycleError } from '@/lib/graph'
 import { IF_SYSTEM_PROMPT, buildIfUserMessage, narrativePrompt } from '@/lib/prompts'
-import { callStructuredLLM, LLMError } from '@/lib/llm'
+import { callStructuredLLM, llmErrorBody } from '@/lib/llm'
 
 const RequestSchema = z.object({
   language: z.enum(['en', 'id']).default('en'),
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
     }
     return NextResponse.json(llmResponse)
   } catch (e) {
-    if (e instanceof LLMError) return NextResponse.json({ error: e.message }, { status: e.status })
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Branch decision failed to process' }, { status: 502 })
+    const { body, status } = llmErrorBody(e, 'Branch decision failed to process')
+    return NextResponse.json(body, { status })
   }
 }

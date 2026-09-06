@@ -8,7 +8,7 @@ import { ReactFlowProvider } from '@xyflow/react'
 import { useEffect, useMemo, useState } from 'react'
 import { Activity, Dices, FileText, History, LayoutGrid, LoaderCircle, PanelLeft, PanelRight, Play, Plus, Redo2, RotateCcw, Undo2, X } from 'lucide-react'
 import { useGraphStore } from '@/lib/store'
-import { useRunStore } from '@/lib/runStore'
+import { useRunStore, useCooldown } from '@/lib/runStore'
 import { validateGraph } from '@/lib/graph'
 import { KondisiAwalSchema } from '@/lib/schema'
 import { executeGraph, fetchSummary } from '@/lib/runExecute'
@@ -37,6 +37,7 @@ export default function Home() {
   const { language, setLanguage } = useLocaleStore()
   const { nodes, edges, kondisiAwal, setKondisiAwal, loadTemplate, applyAutoLayout, undo, redo, past, future } = useGraphStore()
   const { running, lifeState, results, error: runError, summary, summaryLoading, summaryError, closeSummary, chapterComplete, initialConditions, reset } = useRunStore()
+  const cooldown = useCooldown()
   const [showComposer, setShowComposer] = useState(false)
   const [showPalette, setShowPalette] = useState(false)
   const [showResults, setShowResults] = useState(false)
@@ -92,8 +93,8 @@ export default function Home() {
                 <button className="icon-button" title={t("Redo (Ctrl+Shift+Z)")} aria-label={t("Redo")} onClick={redo} disabled={!future.length || running}><Redo2 size={17} /></button></> : <button className="icon-button" title={t('New life')} aria-label={t('New life')} disabled={running || summaryLoading} onClick={() => { if (window.confirm(t('Restart this life? The current progress will be cleared.'))) { reset(); setShowResults(false) } }}><RotateCcw size={17} /></button>}
                 <button className="icon-button" title={t("Tidy up node positions")} aria-label={t("Tidy up node positions")} onClick={applyAutoLayout} disabled={running || issues.length > 0}><LayoutGrid size={17} /></button>
                 <button className="icon-button mobile-panel-button" title={t("Case file")} aria-label={t("Case file")} aria-expanded={showResults} onClick={() => { setShowResults(!showResults); setShowPalette(false) }}><PanelRight size={17} /></button>
-                <button className="execute-button" disabled={!valid || running || summaryLoading || chapterComplete || lifeState?.hidup === false} onClick={() => { setShowResults(true); setShowPalette(false); setShowComposer(false); void executeGraph(nodes, edges, kondisiAwal) }} title={valid ? t("Execute life plan") : t("Resolve the outstanding issues")}>
-                  {running ? <LoaderCircle className="animate-spin" size={15} /> : <Play size={15} fill="currentColor" />}<span>{t(running ? 'Unfolding...' : lifeState?.hidup === false ? 'Life ended' : waitingForEvent ? 'Choose a response' : chapterComplete ? 'Chapter complete' : runError ? 'Try again' : riskWarnings.length ? 'Continue with risk' : lifeState ? 'Continue chapter' : 'Run chapter')}</span>
+                <button className="execute-button" disabled={!valid || running || summaryLoading || chapterComplete || cooldown > 0 || lifeState?.hidup === false} onClick={() => { setShowResults(true); setShowPalette(false); setShowComposer(false); void executeGraph(nodes, edges, kondisiAwal) }} title={valid ? t("Execute life plan") : t("Resolve the outstanding issues")}>
+                  {running ? <LoaderCircle className="animate-spin" size={15} /> : <Play size={15} fill="currentColor" />}<span>{cooldown > 0 ? `${t('Try again in')} ${cooldown}s` : t(running ? 'Unfolding...' : lifeState?.hidup === false ? 'Life ended' : waitingForEvent ? 'Choose a response' : chapterComplete ? 'Chapter complete' : runError ? 'Try again' : riskWarnings.length ? 'Continue with risk' : lifeState ? 'Continue chapter' : 'Run chapter')}</span>
                 </button>
               </div>
             </div>
@@ -124,7 +125,7 @@ export default function Home() {
               {running && <div className="running-note" role="status"><LoaderCircle size={14} className="animate-spin" /> {t("Recording consequences...")}</div>}
             </div>
             {chapterComplete && lifeState?.hidup && <div className="chapter-response"><DecisionComposer onAdded={() => { setShowResults(false); applyAutoLayout() }} /></div>}
-            {runFinished && <button className="close-case-button" onClick={() => fetchSummary(kondisiAwal, lifeState)} disabled={summaryLoading}><FileText size={16} />{summaryLoading ? t("Filing...") : t("Close the case")}</button>}
+            {runFinished && <button className="close-case-button" onClick={() => fetchSummary(kondisiAwal, lifeState)} disabled={summaryLoading || cooldown > 0}><FileText size={16} />{summaryLoading ? t("Filing...") : cooldown > 0 ? `${t('Try again in')} ${cooldown}s` : t("Close the case")}</button>}
           </aside>
         </div>
       </ReactFlowProvider>

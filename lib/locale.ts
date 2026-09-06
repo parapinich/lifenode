@@ -76,6 +76,9 @@ const ID: Record<string, string> = {
   'Restart this life? The current progress will be cleared.': 'Mulai ulang hidup ini? Progres saat ini akan dihapus.',
   'Open another life? The current progress will be cleared.': 'Buka kehidupan lain? Progres saat ini akan dihapus.',
   'Past decisions cannot be changed.': 'Keputusan yang sudah dijalani tidak bisa diubah.',
+  'Branch decision': 'Keputusan cabang', 'Risk assessment': 'Penilaian risiko',
+  'Simulation': 'Simulasi', 'Summary': 'Ringkasan', 'Random event': 'Kejadian acak',
+  'Try again in': 'Coba lagi dalam',
   'Something went wrong. Your progress is saved; try again.': 'Terjadi kesalahan. Progres tetap tersimpan; coba lagi.',
 }
 

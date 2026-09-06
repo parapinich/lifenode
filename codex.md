@@ -1,78 +1,65 @@
-# Lifenode Improve: Sandbox dengan Risiko Kematian
+# Testing Issue: Error Tidak Boleh Generic
 
-Status: diterapkan pada branch `feat-sandbox-mortality`.
+Status: diterapkan sebagian pada branch `error-observability`. Pesan per-stage, status upstream, dan cooldown rate limit sudah jalan. Belum dikerjakan: `requestId`, log server terstruktur, dan field `retryable` eksplisit pada response.
 
-## Implementasi
+## Masalah
 
-- Satu sandbox dengan penilaian risiko kontekstual sebelum narasi. Tindakan berisiko menampilkan peringatan sebelum dilanjutkan.
-- Seed dan akumulasi paparan waktu tersimpan lintas babak. Aktivitas paralel memakai risiko tertinggi pada interval yang sama, bukan menjumlahkan jumlah node.
-- Peluang dasar kejadian fatal mendadak memakai hazard gameplay 0,0002 per tahun. Ini parameter permainan, bukan statistik medis.
-- Hasil fatal menghentikan usia dan narasi pada waktu kejadian. Aktivitas yang belum selesai ditandai terhenti; aktivitas mendatang dilewati.
-- Hasil, riwayat, status, dan jam risiko disimpan bersamaan agar reload tidak mengulang hasil yang sudah diterapkan.
-- Konsekuensi nonfatal diteruskan melalui state dan ledger; belum ada model penyakit terpisah.
-- Batas durasi 15 tahun dihapus untuk keputusan dan Tunggu. Minimal 0,5 tahun dengan kelipatan 0,5 tetap berlaku; angka harus finite dan dapat dihitung dengan presisi yang tersedia.
-- Batas usia kondisi awal 100 dihapus agar babak lanjutan setelah durasi panjang tetap valid.
-- Pengujian meliputi engine, API, retry, cabang paralel, Wait, EN/ID, browser desktop/mobile, dan tes narasi Groq untuk tindakan fatal.
+Saat proses testing gagal, UI hanya menampilkan:
+
+> Terjadi kesalahan. Progres tetap tersimpan; coba lagi.
+
+Pesan ini tidak memberi tahu apakah masalah berasal dari koneksi AI, schema response, graph, random event, penilaian risiko, atau narasi. Log server juga hanya menunjukkan status HTTP seperti `POST /api/simulate 502` tanpa konteks tahap prosesnya.
 
 ## Tujuan
 
-Pertahankan satu mode sandbox yang bebas dan mudah dieksplorasi, tetapi setiap keputusan memiliki konsekuensi yang masuk akal. Karakter dapat meninggal karena tindakan yang sangat berbahaya atau kejadian mendadak yang jarang.
+Tampilkan error yang cukup spesifik agar developer dapat langsung mengetahui lokasi dan jenis masalah selama testing, tanpa membocorkan API key atau data rahasia.
 
-## Risiko Tindakan
+## Pesan Error yang Wajib Dibedakan
 
-- Engine menilai konteks node berdasarkan tindakan, intensitas, durasi, usia, kondisi, skill, resource, dan riwayat karakter.
-- Tindakan jelas fatal tidak diberi penyelamatan ajaib atau undian palsu; hasilnya langsung fatal dengan alasan yang relevan.
-- Tindakan berisiko memakai undian engine yang dapat direproduksi; AI hanya menarasikan hasil yang sudah diputuskan engine.
-- Risiko dihitung berdasarkan rentang waktu dan konteks aktivitas, bukan jumlah node, agar node paralel atau pemecahan aktivitas tidak menggandakan peluang secara artifisial.
-- Tampilkan sinyal risiko yang jelas untuk keputusan berbahaya, tetapi jangan membocorkan hasil kejadian mendadak.
+- `Graph validation failed`: graph tidak valid, node tidak terhubung, branch buntu, atau durasi tidak valid.
+- `Risk assessment failed`: AI gagal menilai risiko atau response risiko tidak sesuai schema.
+- `Simulation narration failed`: penilaian risiko berhasil, tetapi narasi segmen gagal atau response narasi tidak sesuai schema.
+- `Random event generation failed`: request ke `/api/event` gagal atau response event tidak valid.
+- `Random event response failed`: pilihan event tidak dapat diterapkan ke state.
+- `Branch decision failed`: AI gagal memilih edge yang tersedia atau response branch tidak valid.
+- `Summary generation failed`: pembuatan ringkasan akhir gagal.
+- `Network error`: server/API tidak dapat dihubungi.
 
-## Kematian Mendadak
+Pesan harus tersedia dalam bahasa Inggris dan Indonesia. Bahasa error mengikuti bahasa aktif saat request dibuat.
 
-- Saat node biasa berjalan, engine boleh mengundi kejadian fatal yang tidak berasal langsung dari keputusan pemain: kecelakaan, kondisi medis tersembunyi, bencana lokal, atau kejadian eksternal yang masuk akal.
-- Kejadian fatal sangat jarang; kejadian nonfatal lebih sering agar kejutan terasa berarti tanpa membuat permainan frustratif.
-- Simpan seed, waktu, dan hasil undian sebelum meminta narasi. Reload atau retry tidak boleh mengubah hasil yang sudah dipilih.
-- Jangan memaksakan kematian hanya demi drama. Setiap kematian harus memiliki penyebab yang dapat dijelaskan dari konteks kehidupan.
+## Perubahan API dan Log
 
-## Konsekuensi Nonfatal
+- Tambahkan `stage` atau `code` stabil pada response error, bukan hanya teks bebas.
+- Gunakan kode yang sama di client, route handler, dan log server.
+- Log server mencatat stage, route, status upstream, durasi request, dan ringkasan error validasi.
+- Jangan log API key, authorization header, prompt lengkap, isi ledger sensitif, atau seluruh state pengguna.
+- Sertakan `requestId` pendek pada log dan pesan UI agar satu kegagalan mudah dicari.
+- Bedakan error yang bisa dicoba ulang (`network`, rate limit, upstream 5xx) dari error yang membutuhkan perbaikan graph atau schema.
+- Pertahankan progres yang sudah tersimpan dan jangan mengubah seed atau hasil risiko hanya karena request diulang.
 
-- Cedera, pemulihan, kehilangan uang/pekerjaan, atau hubungan yang memburuk dapat bertahan ke node berikutnya.
-- Konsekuensi harus membuka keputusan lanjutan, bukan sekadar mengurangi angka lalu dilupakan.
-- Gunakan state dan ledger yang sudah ada; hindari sistem kesehatan baru yang besar untuk versi awal.
+## Perilaku UI Saat Testing
 
-## Alur Saat Mati
+- Panel hasil menampilkan nama stage, kode error, request ID, dan detail aman yang singkat.
+- Tombol retry hanya muncul untuk error yang memang retryable.
+- Error validasi graph menampilkan node atau field yang bermasalah.
+- Error schema menampilkan field yang hilang atau format yang salah, bukan response mentah yang panjang.
+- Error upstream menampilkan status seperti `Groq 429` atau `Groq 502` jika aman, tanpa kredensial.
+- Console development boleh menampilkan stack trace dan detail Zod; production tetap memakai detail yang disanitasi.
+- Setelah error, node yang sedang loading kembali ke status sebelumnya dan tombol lanjut tetap konsisten.
 
-- Set `state.hidup = false` dan simpan node penyebab, usia/waktu, kategori, serta ringkasan kejadian.
-- Hentikan simulasi pada waktu kejadian; node berikutnya dan cabang paralel yang belum selesai tidak dijalankan.
-- Pertahankan hasil parsial, ledger, dan riwayat yang sudah tercatat.
-- Tandai node penyebab sebagai fatal pada canvas dan panel konsekuensi.
-- Nonaktifkan kelanjutan, keputusan baru, dan rerun untuk kehidupan tersebut; ringkasan tetap dapat dibuat dan pemain dapat memulai kehidupan baru.
-- Retry jaringan boleh mengulang request yang gagal, tetapi tidak boleh mengundi ulang risiko yang sudah tersimpan.
+## Acceptance Test
 
-## UX dan Bahasa
+- Matikan koneksi AI saat `/api/event`, `/api/simulate` risk assessment, `/api/simulate` narration, `/api/branch`, dan `/api/summary`; setiap tahap menghasilkan pesan berbeda.
+- Kirim JSON AI yang tidak sesuai schema untuk setiap route; UI menunjukkan field yang invalid.
+- Kirim graph tidak valid; error menyebut node atau koneksi penyebabnya.
+- Uji status 400, 429, 502, timeout, dan response non-JSON.
+- Pastikan retry request yang gagal tidak mengulang pilihan event atau undian risiko.
+- Pastikan EN/ID menerjemahkan pesan stage dan detail utama.
+- Pastikan API key, authorization header, prompt lengkap, dan state sensitif tidak muncul di UI maupun log.
+- Jalankan unit test, typecheck, lint, build, serta uji browser desktop dan mobile.
 
-- Beri penjelasan singkat di awal bahwa sandbox ini bebas, tetapi keputusan berbahaya dapat mengakhiri kehidupan.
-- Gunakan indikator risiko pada node berbahaya dan ringkasan kematian yang faktual, bukan layar hukuman.
-- Sediakan seluruh label, peringatan, dan narasi UI dalam bahasa Inggris dan Indonesia.
-- Mata uang tetap mengikuti formatter bahasa yang sudah ada.
+## Batasan
 
-## Kontrak dan Validasi
-
-- Tambahkan metadata risiko pada state run dan hasil segmen: kategori, peluang, node penyebab, waktu kejadian, dan status fatal.
-- Validasi delta state, peluang, seed, urutan waktu, dan konsistensi usia di engine sebelum menyimpan hasil.
-- Pisahkan keputusan hidup/mati dari teks narasi agar model tidak dapat membatalkan hasil engine.
-- Progres lama tanpa metadata risiko tetap kompatibel dan dianggap sandbox dengan aturan baru.
-
-## Pengujian
-
-- Tindakan aman tidak memiliki risiko tambahan dari tindakan, tetapi tetap dapat terkena kejadian mendadak yang jarang; tindakan fatal menghentikan flow secara deterministik.
-- Undian berisiko reproducible setelah reload dan retry.
-- Kematian mendadak jarang, kontekstual, dan tidak terpicu berulang pada waktu yang sama.
-- Node setelah kematian, termasuk aktivitas paralel yang belum selesai, tidak dieksekusi.
-- Konsekuensi nonfatal terbawa ke node berikutnya.
-- State, ledger, usia kejadian, status node, ringkasan, EN/ID, unit test, typecheck, lint, build, dan uji browser desktop/mobile tetap konsisten.
-
-## Batasan Versi Awal
-
-- Tidak ada revive atau undo kematian dalam kehidupan yang sama.
-- Tidak ada mode kedua atau pengaturan tingkat kesulitan; sandbox adalah satu-satunya mode.
-- Tabel penyakit dan variasi event yang lebih luas ditambahkan setelah alur kematian dasar stabil.
+- Fokus pertama adalah observability untuk testing; jangan menambah sistem logging eksternal atau dashboard baru.
+- Gunakan helper error yang sudah ada dan response JSON standar sebelum memperkenalkan abstraksi baru.
+- Pesan user-facing tetap singkat; detail teknis lengkap cukup tersedia di console development dan log server yang disanitasi.
