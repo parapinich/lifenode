@@ -34,6 +34,7 @@ export async function POST(req: Request) {
   }
   const pilihan = graph.edges
     .filter((e) => e.from === ifNodeId)
+    .filter((e, index, all) => all.findIndex((other) => other.label === e.label) === index)
     .map((e) => ({ edgeId: e.id, label: e.label ?? '' }))
 
   let timing

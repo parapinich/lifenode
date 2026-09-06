@@ -14,7 +14,7 @@ export function DecisionComposer({ anchor, mode = 'after', onAdded }: { anchor?:
   const [lane, setLane] = useState<Lane>('chaos')
   const { running, chapterComplete, summaryLoading, lifeState, nextSyncId } = useRunStore()
   const { addDecision, nextChapter, nodes } = useGraphStore()
-  const pendingChoice = !anchor && nodes.some((n) => n.id === nextSyncId && n.kind === 'if')
+  const pendingChoice = !anchor && nodes.some((n) => n.id === nextSyncId && (n.kind === 'if' || n.kind === 'event'))
   return <form className="decision-composer nodrag nopan" onSubmit={(e) => {
     e.preventDefault()
     if (running || summaryLoading || pendingChoice || !label.trim()) return

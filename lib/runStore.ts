@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { KondisiAwal, LifeState, RingkasanResponse, StatusNode } from './schema'
+import type { KondisiAwal, LifeState, RingkasanResponse, StatusNode, RandomEvent } from './schema'
+
+export interface EventRecord { roll: number; data?: RandomEvent; choice?: number; skipped?: boolean; error?: boolean }
 
 export type NodeRunStatus = 'idle' | 'loading' | StatusNode | 'skipped'
 
@@ -18,6 +20,8 @@ export interface SegmentResultView {
 }
 
 interface RunStore {
+  events: Record<string, EventRecord>
+  lastEventAge: number | null
   running: boolean
   nextSyncId: string | null
   chapterComplete: boolean
@@ -46,6 +50,8 @@ interface RunStore {
 }
 
 export const useRunStore = create<RunStore>()(persist((set) => ({
+  events: {},
+  lastEventAge: null,
   running: false,
   nextSyncId: null,
   chapterComplete: false,
@@ -78,7 +84,7 @@ export const useRunStore = create<RunStore>()(persist((set) => ({
   setSummary: (summary) => set({ summary, summaryLoading: false }),
   failSummary: (message) => set({ summaryLoading: false, summaryError: message }),
   closeSummary: () => set({ summary: null, summaryError: null }),
-  reset: () => set({ running: false, nextSyncId: null, chapterComplete: false, lockedNodeIds: [], selectedBranches: {}, branchNarratives: {}, initialConditions: null, nodeStatus: {}, initialState: null, lifeState: null, results: [], error: null, summary: null, summaryLoading: false, summaryError: null }),
+  reset: () => set({ events: {}, lastEventAge: null, running: false, nextSyncId: null, chapterComplete: false, lockedNodeIds: [], selectedBranches: {}, branchNarratives: {}, initialConditions: null, nodeStatus: {}, initialState: null, lifeState: null, results: [], error: null, summary: null, summaryLoading: false, summaryError: null }),
 }), {
   name: 'lifenode-run',
   partialize: (s) => ({ ...s, running: false, summaryLoading: false, nodeStatus: Object.fromEntries(Object.entries(s.nodeStatus).map(([id, status]) => [id, status === 'loading' ? 'idle' as const : status])) }),

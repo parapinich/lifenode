@@ -36,6 +36,7 @@ async function main() {
     await page.getByRole('button', { name: 'Ulangi', exact: true }).click()
     assert.equal(await page.locator('.react-flow__node').count(), 4)
 
+    const simpleGraph = await page.evaluate(() => localStorage.getItem('lifenode-graph'))
     let previous
     for (let i = 0; i < 4; i++) {
       await page.getByRole('button', { name: 'Buka contoh kehidupan', exact: true }).first().click()
@@ -57,6 +58,9 @@ async function main() {
     assert.equal(await page.locator('.react-flow__node-aksi input[aria-label="Decision name"]').evaluateAll((inputs) => inputs.map((input) => input.value).join('|')), previous)
     await page.getByRole('button', { name: 'ID', exact: true }).click()
 
+    await page.evaluate((value) => localStorage.setItem('lifenode-graph', value), simpleGraph)
+    await page.reload({ waitUntil: 'networkidle' })
+    await page.locator('.react-flow__node-aksi').first().waitFor()
     await page.route('**/api/simulate', async (route) => {
       const request = route.request().postDataJSON()
       requests.push(request)
@@ -71,7 +75,7 @@ async function main() {
     await page.getByRole('button', { name: 'Jalankan babak', exact: true }).click()
     await page.getByRole('button', { name: 'Berlangsung...', exact: true }).waitFor()
     await page.keyboard.press('Control+z')
-    assert.equal(await page.locator('.react-flow__node').count(), 5)
+    assert.equal(await page.locator('.react-flow__node').count(), 4)
     await page.getByRole('button', { name: 'Babak selesai', exact: true }).waitFor()
     assert.equal(requests[0].language, 'id')
     assert(await page.locator('.react-flow__node-aksi input[aria-label="Nama keputusan"]').first().isDisabled())

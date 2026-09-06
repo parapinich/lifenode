@@ -1,5 +1,5 @@
 import { useT } from '@/lib/locale'
-import { BriefcaseBusiness, Heart, Activity, Shuffle, GitMerge, Hourglass, Split, Plus, X, FileText } from 'lucide-react'
+import { BriefcaseBusiness, Heart, Activity, Shuffle, Dices, Hourglass, Split, Plus, X, FileText } from 'lucide-react'
 import { useReactFlow } from '@xyflow/react'
 import { useRunStore } from '@/lib/runStore'
 import { useGraphStore } from '@/lib/store'
@@ -16,13 +16,13 @@ const PRESETS: Record<Lane, string[]> = {
 const ICONS = { karir: BriefcaseBusiness, relasi: Heart, kesehatan: Activity, chaos: Shuffle }
 export type PaletteDragPayload =
   | { type: 'aksi'; lane: Lane; label: string }
-  | { type: 'tunggu' } | { type: 'if' } | { type: 'merge' }
+  | { type: 'tunggu' } | { type: 'if' } | { type: 'event' }
 
 export function NodePalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const t = useT()
   const running = useRunStore((s) => s.running || s.summaryLoading || s.chapterComplete)
   const busy = useRunStore((s) => s.running || s.summaryLoading)
-  const { addDecision, addTungguNode, addIfNode, addMergeNode, loadTemplate } = useGraphStore()
+  const { addDecision, addTungguNode, addIfNode, addEventNode, loadTemplate } = useGraphStore()
   const { screenToFlowPosition } = useReactFlow()
 
   function add(payload: PaletteDragPayload) {
@@ -33,7 +33,7 @@ export function NodePalette({ open, onClose }: { open: boolean; onClose: () => v
     if (payload.type === 'aksi') addDecision(t(payload.label), payload.lane)
     else if (payload.type === 'tunggu') addTungguNode(pos.x - 80, pos.y - 40)
     else if (payload.type === 'if') addIfNode(pos.x - 104, pos.y - 40)
-    else addMergeNode(pos.x - 60, pos.y - 20)
+    else addEventNode(pos.x - 110, pos.y - 40)
     onClose()
   }
   function drag(e: React.DragEvent, payload: PaletteDragPayload) {
@@ -53,7 +53,7 @@ export function NodePalette({ open, onClose }: { open: boolean; onClose: () => v
           </section>
         })}
         <section className="decision-group timing-group"><h3>{t("Time & contingencies")}</h3>{([
-          ['tunggu', t("Wait"), Hourglass], ['if', t("If"), Split], ['merge', t("Merge"), GitMerge],
+          ['tunggu', t("Wait"), Hourglass], ['if', t("If"), Split], ['event', t("Random Event"), Dices],
         ] as const).map(([type, label, Icon]) => <button key={type} className="decision-option" draggable={!running} disabled={running} onDragStart={(e) => drag(e, { type })} onClick={() => add({ type })}><Icon size={14} /><span>{t(label)}</span><Plus size={13} /></button>)}</section>
       </div>
       <button className="example-button" onClick={() => { loadTemplate(); onClose() }} disabled={busy}><FileText size={15} /> {t("Open an example case")}</button>

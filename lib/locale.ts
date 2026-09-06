@@ -11,6 +11,13 @@ export const useLocaleStore = create<{ language: Language; setLanguage: (languag
 )
 
 const ID: Record<string, string> = {
+  'Dark mode': 'Mode gelap', 'Light mode': 'Mode terang',
+  'Insert node': 'Sisipkan node', 'Cancel': 'Batal', 'Decision': 'Keputusan',
+  'Node type': 'Jenis node', 'Random Event': 'Kejadian Acak', 'Surprise me': 'Beri kejutan',
+  'Choose a response': 'Pilih respons', 'Reveal event': 'Buka kejutan',
+  'No unexpected event this time.': 'Tidak ada kejadian tak terduga kali ini.',
+  'Event unavailable. Retry or continue without it.': 'Kejadian belum bisa dimuat. Coba lagi atau lanjut tanpa kejadian.',
+  'Continue without event': 'Lanjut tanpa kejadian', 'Response recorded': 'Respons tercatat',
   'Department of possible futures': 'Departemen kemungkinan masa depan',
   'Case history': 'Riwayat hidup', 'Case History': 'Riwayat hidup',
   'Starting conditions': 'Kondisi awal', '01 / The subject': '01 / Pemeran utama',

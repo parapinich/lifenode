@@ -11,6 +11,8 @@ import {
   MiniMap,
   SelectionMode,
   useReactFlow,
+  useNodesInitialized,
+  getNodesBounds,
   type Connection,
   type Edge,
   type EdgeChange,
@@ -24,6 +26,8 @@ import { StartNode } from './nodes/StartNode'
 import { AksiNode } from './nodes/AksiNode'
 import { TungguNode } from './nodes/TungguNode'
 import { MergeNode } from './nodes/MergeNode'
+import { EventNode } from './nodes/EventNode'
+import { useThemeStore } from '@/lib/theme'
 import { IfNode } from './nodes/IfNode'
 import { EndNode } from './nodes/EndNode'
 import { DeletableEdge } from './edges/DeletableEdge'
@@ -36,6 +40,7 @@ const nodeTypes = {
   aksi: AksiNode,
   tunggu: TungguNode,
   merge: MergeNode,
+  event: EventNode,
   if: IfNode,
   end: EndNode,
 }
@@ -43,6 +48,7 @@ const edgeTypes = { deletable: DeletableEdge }
 
 export function Board() {
   const language = useLocaleStore((s) => s.language)
+  const theme = useThemeStore((s) => s.theme)
   const nodes = useGraphStore((s) => s.nodes)
   const edges = useGraphStore((s) => s.edges)
   const kondisiAwal = useGraphStore((s) => s.kondisiAwal)
@@ -52,15 +58,28 @@ export function Board() {
   const addAksiNode = useGraphStore((s) => s.addAksiNode)
   const addTungguNode = useGraphStore((s) => s.addTungguNode)
   const addIfNode = useGraphStore((s) => s.addIfNode)
-  const addMergeNode = useGraphStore((s) => s.addMergeNode)
+  const addEventNode = useGraphStore((s) => s.addEventNode)
   const removeElements = useGraphStore((s) => s.removeElements)
   const lockedNodeIds = useRunStore((s) => s.lockedNodeIds)
   const nodeStatus = useRunStore((s) => s.nodeStatus)
   const running = useRunStore((s) => s.running)
   const layoutVersion = useGraphStore((s) => s.layoutVersion)
-  const { screenToFlowPosition, fitView } = useReactFlow()
+  const { screenToFlowPosition, fitView, getNodes, setViewport } = useReactFlow()
+  const initialized = useNodesInitialized()
   const boardRef = useRef<HTMLDivElement>(null)
   const [touchMode, setTouchMode] = useState(false)
+  const framePlan = useCallback(() => {
+    const rendered = getNodes()
+    const board = boardRef.current
+    if (!board || !rendered.length) return
+    const bounds = getNodesBounds(rendered)
+    const fitZoom = Math.min(board.clientWidth / (bounds.width * 1.2), board.clientHeight / (bounds.height * 1.2))
+    if (fitZoom >= 0.65) { void fitView({ padding: 0.2, maxZoom: 1, duration: 300 }); return }
+    const cursor = useRunStore.getState().nextSyncId
+    const focus = rendered.find((n) => n.id === cursor && n.type !== 'end') ?? rendered.find((n) => n.type === (board.clientWidth < 600 ? 'aksi' : 'start')) ?? rendered[0]
+    const zoom = 0.85
+    void setViewport({ x: 32 - focus.position.x * zoom, y: board.clientHeight / 2 - (focus.position.y + (focus.measured?.height ?? 100) / 2) * zoom, zoom }, { duration: 300 })
+  }, [getNodes, fitView, setViewport])
 
   useEffect(() => {
     const media = window.matchMedia('(pointer: coarse)')
@@ -75,19 +94,19 @@ export function Board() {
     const observer = new ResizeObserver(([entry]) => {
       const width = entry.contentRect.width
       if (previousWidth !== undefined && width !== previousWidth) {
-        void fitView({ padding: 0.2, maxZoom: 1 })
+        framePlan()
       }
       previousWidth = width
     })
     if (boardRef.current) observer.observe(boardRef.current)
     return () => observer.disconnect()
-  }, [fitView])
+  }, [framePlan])
 
   useEffect(() => {
-    if (layoutVersion === 0) return
-    const id = requestAnimationFrame(() => fitView({ duration: 300, padding: 0.15 }))
+    if (!initialized) return
+    const id = requestAnimationFrame(framePlan)
     return () => cancelAnimationFrame(id)
-  }, [layoutVersion, fitView])
+  }, [layoutVersion, initialized, framePlan])
 
   const issues = useMemo(() => validateGraph({ nodes, edges }, language), [nodes, edges, language])
   const issuesByNode = useMemo(() => {
@@ -212,14 +231,15 @@ export function Board() {
       if (payload.type === 'aksi') addAksiNode(payload.lane, payload.label, pos.x, pos.y)
       else if (payload.type === 'tunggu') addTungguNode(pos.x, pos.y)
       else if (payload.type === 'if') addIfNode(pos.x, pos.y)
-      else addMergeNode(pos.x, pos.y)
+      else if (payload.type === 'event') addEventNode(pos.x, pos.y)
     },
-    [running, screenToFlowPosition, addAksiNode, addTungguNode, addIfNode, addMergeNode]
+    [running, screenToFlowPosition, addAksiNode, addTungguNode, addIfNode, addEventNode]
   )
 
   return (
     <div ref={boardRef} className="life-board" onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
       <ReactFlow
+        colorMode={theme}
         ariaLabelConfig={language === 'id' ? { 'controls.zoomIn.ariaLabel': 'Perbesar', 'controls.zoomOut.ariaLabel': 'Perkecil', 'controls.fitView.ariaLabel': 'Tampilkan seluruh rencana', 'controls.interactive.ariaLabel': 'Kunci atau buka interaksi' } : undefined}
         nodes={rfNodes}
         edges={rfEdges}
@@ -239,10 +259,10 @@ export function Board() {
         selectionMode={SelectionMode.Partial}
         deleteKeyCode={['Backspace', 'Delete']}
         fitView
-        fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
+        fitViewOptions={{ padding: 0.2, minZoom: 0.65, maxZoom: 1 }}
         minZoom={0.15}
       >
-        <Background variant={BackgroundVariant.Dots} color="#bec2bd" gap={22} size={1} bgColor="#e9ece7" />
+        <Background variant={BackgroundVariant.Dots} color="var(--canvas-dot)" gap={22} size={1} bgColor="var(--canvas)" />
         <Controls />
         {nodes.length > 8 && <MiniMap className="life-minimap" pannable zoomable ariaLabel={language === 'id' ? 'Peta hidup' : 'Life map'} nodeColor={(node) => ({ karir: '#588369', relasi: '#ae6984', kesehatan: '#548f9a', chaos: '#c39b40' })[node.data.lane as Lane] ?? '#7b8179'} />}
       </ReactFlow>

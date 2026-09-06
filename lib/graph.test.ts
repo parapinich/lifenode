@@ -26,10 +26,13 @@ it('keeps parallel decision cards and waits from overlapping after layout', () =
     nodes.push(node({ id: `w${index}`, kind: 'tunggu', durasi: 2 }))
     edges.push(edge(`s${index}`, 'start', `a${index}`), edge(`t${index}`, `a${index}`, `w${index}`), edge(`e${index}`, `w${index}`, 'end'))
   }
-  const positions = Object.values(autoLayout({ nodes, edges }, 20))
+  const layout = autoLayout({ nodes, edges }, 20)
+  const positions = nodes.map((n) => layout[n.id])
   for (let i = 0; i < positions.length; i++) {
     for (let j = i + 1; j < positions.length; j++) {
-      expect(Math.abs(positions[i].x - positions[j].x) >= 260 || Math.abs(positions[i].y - positions[j].y) >= 340).toBe(true)
+      const height = nodes[i].kind === 'aksi' ? 300 : 100
+      const otherHeight = nodes[j].kind === 'aksi' ? 300 : 100
+      expect(Math.abs(positions[i].x - positions[j].x) >= 260 || positions[i].y + height <= positions[j].y || positions[j].y + otherHeight <= positions[i].y).toBe(true)
     }
   }
 })
@@ -40,8 +43,9 @@ describe('graf linear', () => {
       nodes: [node({ id: 'start', kind: 'start' }), node({ id: 'rest', kind: 'aksi', lane: 'kesehatan', label: 'Rest' }), node({ id: 'end', kind: 'end' })],
       edges: [edge('a', 'start', 'rest'), edge('b', 'rest', 'end')],
     }
-    const positions = Object.values(autoLayout(graph, 20))
-    expect(new Set(positions.map((p) => p.y)).size).toBe(1)
+    const positions = autoLayout(graph, 20)
+    expect(positions.start.y + 50).toBe(positions.rest.y + 150)
+    expect(positions.end.y).toBe(positions.start.y)
   })
   const graph: Graph = {
     nodes: [
@@ -119,7 +123,7 @@ describe('graf bercabang dengan merge timpang', () => {
     expect(karir.gapTahun).toBe(0)
     // relasi cuma 3 tahun (relasi-wait) — nganggur 6 tahun nunggu karir kelar.
     expect(relasi.gapTahun).toBe(6)
-    expect(karir.nodes).toEqual([{ id: 'karir', label: 'Buka warung', durasi: 1, intensity: 3, note: undefined }])
+    expect(karir.nodes).toEqual([{ id: 'karir', label: 'Buka warung', durasi: 1, intensity: 3, note: undefined, umurMulai: 20, umurSelesai: 21, predecessors: ['start'] }])
   })
 
   it('autoLayout nempatin node per lane band dan x ngikutin umur', () => {

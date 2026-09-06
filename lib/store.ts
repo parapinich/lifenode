@@ -13,7 +13,8 @@ interface GraphStore extends GraphSnapshot {
   addAksiNode: (lane: Lane, label: string, x: number, y: number) => void
   addTungguNode: (x: number, y: number) => void
   addIfNode: (x: number, y: number) => void
-  addMergeNode: (x: number, y: number) => void
+  addEventNode: (x: number, y: number) => void
+  insertNode: (edgeId: string, kind: 'aksi' | 'tunggu' | 'if' | 'event', label?: string, lane?: Lane) => boolean
   addDecision: (label: string, lane: Lane, anchor?: string, mode?: 'after' | 'parallel') => void
   nextChapter: (label: string, lane: Lane) => void
   updateNode: (id: string, patch: Partial<LifeNode>) => void
@@ -32,7 +33,7 @@ interface GraphStore extends GraphSnapshot {
 }
 const endpoints: LifeNode[] = [{ id: 'start', kind: 'start', x: 40, y: 200 }, { id: 'end', kind: 'end', x: 720, y: 200 }]
 const busy = () => useRunStore.getState().running || useRunStore.getState().summaryLoading
-const edgeLocked = (e: Edge) => isNodeLocked(e.to) || !!useRunStore.getState().selectedBranches[e.from] || (isNodeLocked(e.from) && e.from !== useRunStore.getState().nextSyncId)
+export const edgeLocked = (e: Edge) => isNodeLocked(e.to) || !!useRunStore.getState().selectedBranches[e.from] || (isNodeLocked(e.from) && e.from !== useRunStore.getState().nextSyncId)
 
 export const useGraphStore = create<GraphStore>()(persist((set, get) => {
   function snapshot() {
@@ -50,7 +51,31 @@ export const useGraphStore = create<GraphStore>()(persist((set, get) => {
     addAksiNode: (lane, label, x, y) => add({ id: newId('aksi'), kind: 'aksi', x, y, lane, label, intensity: 1, durasi: 1 }),
     addTungguNode: (x, y) => add({ id: newId('tunggu'), kind: 'tunggu', x, y, durasi: 1 }),
     addIfNode: (x, y) => add({ id: newId('if'), kind: 'if', x, y }),
-    addMergeNode: (x, y) => add({ id: newId('merge'), kind: 'merge', x, y }),
+    addEventNode: (x, y) => add({ id: newId('event'), kind: 'event', x, y }),
+    insertNode: (edgeId, kind, label = '', lane = 'chaos') => {
+      const { nodes, edges, kondisiAwal } = get()
+      const edge = edges.find((e) => e.id === edgeId)
+      if (busy() || useRunStore.getState().chapterComplete || !edge || edgeLocked(edge) || (kind === 'aksi' && !label.trim())) return false
+      const from = nodes.find((n) => n.id === edge.from)!
+      const to = nodes.find((n) => n.id === edge.to)!
+      const id = newId(kind)
+      const language = useLocaleStore.getState().language
+      const node: LifeNode = { id, kind, x: (from.x + to.x) / 2, y: (from.y + to.y) / 2, ...(kind === 'aksi' ? { label: label.trim().slice(0, 60), lane, intensity: 1, durasi: 1 } : kind === 'tunggu' ? { durasi: 1 } : {}) }
+      const nextNodes = [...nodes, node]
+      const nextEdges = edges.map((e) => e.id === edgeId ? { ...e, to: id } : e)
+      if (kind === 'if') {
+        for (const [index, name] of (language === 'id' ? ['Ambil kesempatan', 'Lanjutkan rencana'] : ['Take the opportunity', 'Keep the plan']).entries()) {
+          const branch = newId('aksi')
+          nextNodes.push({ id: branch, kind: 'aksi', lane: 'chaos', label: name, durasi: 1, intensity: 1, x: node.x + 320, y: node.y + index * 340 })
+          nextEdges.push({ id: newId('edge'), from: id, to: branch, label: language === 'id' ? (index ? 'Jika tidak memungkinkan' : 'Jika situasi mendukung') : (index ? 'Otherwise' : 'If circumstances allow') }, { id: newId('edge'), from: branch, to: edge.to })
+        }
+      } else nextEdges.push({ id: newId('edge'), from: id, to: edge.to })
+      if (validateGraph({ nodes: nextNodes, edges: nextEdges }).length) return false
+      snapshot()
+      const positions = autoLayout({ nodes: nextNodes, edges: nextEdges }, kondisiAwal.umur)
+      set((s) => ({ nodes: nextNodes.map((n) => ({ ...n, ...positions[n.id] })), edges: nextEdges, layoutVersion: s.layoutVersion + 1 }))
+      return true
+    },
     updateNode: (id, patch) => {
       if (busy() || isNodeLocked(id)) return
       set((s) => ({ nodes: s.nodes.map((n) => n.id === id ? { ...n, ...patch } : n) }))
@@ -103,39 +128,18 @@ export const useGraphStore = create<GraphStore>()(persist((set, get) => {
       const { nodes, edges } = get()
       const source = nodes.find((n) => n.id === (anchor ?? run.nextSyncId)) ?? nodes.find((n) => n.kind === 'start')
       const end = nodes.find((n) => n.kind === 'end')
-      if (!source || !end || ['end', 'if', 'tunggu'].includes(source.kind) || (isNodeLocked(source.id) && source.id !== run.nextSyncId)) return
+      if (!source || !end || ['end', 'if', 'tunggu', 'event'].includes(source.kind) || (isNodeLocked(source.id) && source.id !== run.nextSyncId)) return
       snapshot()
       const id = newId('aksi')
       const outgoing = edges.filter((e) => e.from === source.id)
-      const extraNodes: LifeNode[] = []
       let nextEdges: Edge[]
       if (mode === 'parallel' && source.kind === 'aksi') {
         const incoming = edges.filter((e) => e.to === source.id)
-        nextEdges = [...edges]
-        if (incoming.some((e) => nodes.some((n) => n.id === e.from && (n.kind === 'if' || n.kind === 'tunggu')))) {
-          const forkId = newId('merge')
-          extraNodes.push({ id: forkId, kind: 'merge', x: source.x - 120, y: source.y })
-          nextEdges = nextEdges.map((e) => e.to === source.id ? { ...e, to: forkId } : e)
-          nextEdges.push({ id: newId('edge'), from: forkId, to: source.id }, { id: newId('edge'), from: forkId, to: id })
-        } else {
-          nextEdges.push(...incoming.map((e) => ({ id: newId('edge'), from: e.from, to: id })))
-        }
-        if (outgoing.some((e) => nodes.some((n) => n.id === e.to && (n.kind === 'if' || n.kind === 'tunggu')))) {
-          const joinId = newId('merge')
-          extraNodes.push({ id: joinId, kind: 'merge', x: source.x + 270, y: source.y })
-          nextEdges = nextEdges.map((e) => e.from === source.id ? { ...e, from: joinId } : e)
-          nextEdges.push({ id: newId('edge'), from: source.id, to: joinId }, { id: newId('edge'), from: id, to: joinId })
-        } else {
-          nextEdges.push(...outgoing.map((e) => ({ id: newId('edge'), from: id, to: e.to })))
-        }
+        nextEdges = [...edges, ...incoming.map((e) => ({ ...e, id: newId('edge'), to: id })), ...outgoing.map((e) => ({ id: newId('edge'), from: id, to: e.to }))]
       } else {
-        nextEdges = [...edges.filter((e) => e.from !== source.id), { id: newId('edge'), from: source.id, to: id }, ...(outgoing.length ? outgoing.map((e) => ({ id: newId('edge'), from: id, to: e.to })) : [{ id: newId('edge'), from: id, to: end.id }])]
+        nextEdges = [...edges.filter((e) => e.from !== source.id), { id: newId('edge'), from: source.id, to: id }, ...(outgoing.length ? outgoing.map((e) => ({ ...e, id: newId('edge'), from: id })) : [{ id: newId('edge'), from: id, to: end.id }])]
       }
-      const nextNodes: LifeNode[] = [...nodes, ...extraNodes, { id, kind: 'aksi', lane, label: label.trim().slice(0, 60), durasi: 1, intensity: 1, x: source.x + (mode === 'parallel' ? 0 : 280), y: source.y + (mode === 'parallel' ? 340 : 0) }]
-      if (extraNodes.length && validateGraph({ nodes: nextNodes, edges: nextEdges }).length === 0) {
-        const positions = autoLayout({ nodes: nextNodes, edges: nextEdges }, get().kondisiAwal.umur)
-        set((s) => ({ nodes: nextNodes.map((n) => ({ ...n, ...positions[n.id] })), edges: nextEdges, layoutVersion: s.layoutVersion + 1 }))
-      } else set({ nodes: nextNodes, edges: nextEdges })
+      set({ nodes: [...nodes, { id, kind: 'aksi', lane, label: label.trim().slice(0, 60), durasi: 1, intensity: 1, x: source.x + (mode === 'parallel' ? 0 : 320), y: source.y + (mode === 'parallel' ? 340 : 0) }], edges: nextEdges })
     },
     nextChapter: (label, lane) => {
       const run = useRunStore.getState()

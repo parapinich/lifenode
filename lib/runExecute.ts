@@ -1,5 +1,6 @@
 import { computeGraph, computeOneSegment, executionGraph, validateGraph } from './graph'
 import { appendLedger, applyDelta } from './engine'
+import { prepareEvent } from './randomEvent'
 import { useRunStore } from './runStore'
 import { useHistoryStore } from './historyStore'
 import { translate, useLocaleStore } from './locale'
@@ -25,6 +26,11 @@ export async function executeGraph(nodes: LifeNode[], edges: Edge[], kondisiAwal
     }
     const state = useRunStore.getState().lifeState!
     const cursor = useRunStore.getState().nextSyncId ?? start.id
+    if (nodes.find((n) => n.id === cursor)?.kind === 'event') {
+      await prepareEvent(cursor)
+      const event = useRunStore.getState().events[cursor]
+      if (!event?.skipped && event?.choice === undefined) { run.finishRun(); return }
+    }
     const choices = { ...run.selectedBranches }
     let branchNarrative: string | undefined = run.branchNarratives[cursor]
     if (nodes.find((n) => n.id === cursor)?.kind === 'if' && !choices[cursor]) {
@@ -62,6 +68,7 @@ export async function executeGraph(nodes: LifeNode[], edges: Edge[], kondisiAwal
     }
     run.pushResult({ segmentId: `${run.results.length}:${segment.id}`, narasiSegmen: result.narasiSegmen, narasiGap: result.narasiGap, perNode: result.perNode, branchNarrative }, nextState)
     useRunStore.setState((s) => ({ nextSyncId: segment.syncEndId, lockedNodeIds: [...new Set([...s.lockedNodeIds, ...visited])], chapterComplete: nodes.find((n) => n.id === segment.syncEndId)?.kind === 'end' || !nextState.hidup }))
+    if (nextState.hidup && nodes.find((n) => n.id === segment.syncEndId)?.kind === 'event') await prepareEvent(segment.syncEndId)
     run.finishRun()
   } catch {
     for (const id of activeIds) run.setNodeStatus(id, 'idle')

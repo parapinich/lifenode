@@ -3,7 +3,7 @@ import { z } from 'zod'
 export const LANES = ['karir', 'relasi', 'kesehatan', 'chaos'] as const
 export type Lane = (typeof LANES)[number]
 
-export const NODE_KINDS = ['start', 'aksi', 'tunggu', 'merge', 'if', 'end'] as const
+export const NODE_KINDS = ['start', 'aksi', 'tunggu', 'merge', 'if', 'event', 'end'] as const
 export type NodeKind = (typeof NODE_KINDS)[number]
 
 export const STATUS_NODE = ['sukses', 'separuh', 'gagal'] as const
@@ -84,6 +84,9 @@ export const CabangSchema = z.object({
       durasi: z.number(),
       intensity: z.union([z.literal(1), z.literal(2), z.literal(3)]),
       note: z.string().optional(),
+      umurMulai: z.number().optional(),
+      umurSelesai: z.number().optional(),
+      predecessors: z.array(z.string()).optional(),
     })
   ),
 })
@@ -118,6 +121,22 @@ export const SegmentResponseSchema = z.object({
   kejadianPenting: z.array(z.string()).max(2),
 })
 export type SegmentResponse = z.infer<typeof SegmentResponseSchema>
+
+export const RandomEventSchema = z.object({
+  title: z.string().min(1).max(100),
+  story: z.string().min(1).max(900),
+  options: z.array(z.object({
+    label: z.string().min(1).max(100),
+    consequence: z.string().min(1).max(500),
+    uang: z.number().min(-100000000).max(100000000),
+    energi: z.number().min(-30).max(30),
+    reputasi: z.number().min(-30).max(30),
+    kebahagiaan: z.number().min(-30).max(30),
+    skill: z.array(z.string().max(80)).max(2),
+    relasi: LifeStateSchema.shape.relasi.max(2),
+  })).min(2).max(3),
+})
+export type RandomEvent = z.infer<typeof RandomEventSchema>
 
 // --- Kontrak LLM: keputusan cabang di node If ---
 

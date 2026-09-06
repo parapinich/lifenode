@@ -1,6 +1,8 @@
 'use client'
 
 import { useT, useLocaleStore, formatMoney } from '@/lib/locale'
+import { useThemeStore } from '@/lib/theme'
+import { Moon, Sun } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { ReactFlowProvider } from '@xyflow/react'
 import { useEffect, useMemo, useState } from 'react'
@@ -16,6 +18,7 @@ import { DecisionComposer } from '@/components/canvas/DecisionComposer'
 import { SegmentResult } from '@/components/result/SegmentResult'
 import { LifeCard } from '@/components/result/LifeCard'
 import { HistoryPanel } from '@/components/result/HistoryPanel'
+import { EventResponse } from '@/components/result/EventResponse'
 
 const Board = dynamic(() => import('@/components/canvas/Board').then((m) => m.Board), {
   ssr: false,
@@ -29,6 +32,8 @@ const STATS = [
 
 export default function Home() {
   const t = useT()
+  const { theme, toggle } = useThemeStore()
+  useEffect(() => { document.documentElement.dataset.theme = theme }, [theme])
   const { language, setLanguage } = useLocaleStore()
   const { nodes, edges, kondisiAwal, setKondisiAwal, loadTemplate, applyAutoLayout, undo, redo, past, future } = useGraphStore()
   const { running, lifeState, results, error: runError, summary, summaryLoading, summaryError, closeSummary, chapterComplete, initialConditions, reset } = useRunStore()
@@ -42,6 +47,7 @@ export default function Home() {
   const runFinished = !running && !runError && results.length > 0 && lifeState !== null
   const decisions = nodes.filter((n) => n.kind === 'aksi').length
   const stats = lifeState ?? { ...kondisiAwal, energi: 100, reputasi: 50, kebahagiaan: 50 }
+  const waitingForEvent = useRunStore((s) => !!s.nextSyncId && !!s.events[s.nextSyncId]?.data && s.events[s.nextSyncId]?.choice === undefined)
   useEffect(() => { document.documentElement.lang = language }, [language])
 
   useEffect(() => {
@@ -61,6 +67,7 @@ export default function Home() {
       <header className="masthead">
         <div className="brand"><Activity aria-hidden="true" size={27} /><h1>Lifenode<span>.</span></h1></div>
         <span className="masthead-note">{t("Department of possible futures")}</span>
+        <button className="icon-button theme-toggle" onClick={toggle} aria-label={t(theme === 'light' ? 'Dark mode' : 'Light mode')} title={t(theme === 'light' ? 'Dark mode' : 'Light mode')}>{theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}</button>
         <button className="history-button" aria-label={t('Case history')} title={t('Case history')} onClick={() => setShowHistory(true)}><History size={16} /> <span>{t("Case history")}</span></button>
         <div className="language-switch" role="group" aria-label={t('Language')}><button aria-pressed={language === 'en'} onClick={() => setLanguage('en')} lang="en">EN</button><button aria-pressed={language === 'id'} onClick={() => setLanguage('id')} lang="id">ID</button></div>
       </header>
@@ -84,7 +91,7 @@ export default function Home() {
                 <button className="icon-button" title={t("Tidy up node positions")} aria-label={t("Tidy up node positions")} onClick={applyAutoLayout} disabled={running || issues.length > 0}><LayoutGrid size={17} /></button>
                 <button className="icon-button mobile-panel-button" title={t("Case file")} aria-label={t("Case file")} aria-expanded={showResults} onClick={() => { setShowResults(!showResults); setShowPalette(false) }}><PanelRight size={17} /></button>
                 <button className="execute-button" disabled={!valid || running || summaryLoading || chapterComplete || lifeState?.hidup === false} onClick={() => { setShowResults(true); setShowPalette(false); setShowComposer(false); void executeGraph(nodes, edges, kondisiAwal) }} title={valid ? t("Execute life plan") : t("Resolve the outstanding issues")}>
-                  {running ? <LoaderCircle className="animate-spin" size={15} /> : <Play size={15} fill="currentColor" />}<span>{t(running ? 'Unfolding...' : chapterComplete ? 'Chapter complete' : runError ? 'Try again' : lifeState ? 'Continue chapter' : 'Run chapter')}</span>
+                  {running ? <LoaderCircle className="animate-spin" size={15} /> : <Play size={15} fill="currentColor" />}<span>{t(running ? 'Unfolding...' : waitingForEvent ? 'Choose a response' : chapterComplete ? 'Chapter complete' : runError ? 'Try again' : lifeState ? 'Continue chapter' : 'Run chapter')}</span>
                 </button>
               </div>
             </div>
@@ -108,6 +115,7 @@ export default function Home() {
             <dl className="resource-ledger">{STATS.map(({ key, label }) => <div key={key}><dt>{t(label)}</dt><dd>{key === 'uang' ? formatMoney(stats[key], language) : stats[key].toLocaleString(language === 'id' ? 'id-ID' : 'en-US')}{key !== 'umur' && key !== 'uang' && <meter min={0} max={100} value={stats[key]} aria-label={t(label)} />}</dd></div>)}</dl>
             <div className="record-heading"><span className="eyebrow">{t("Record of events")}</span><span className="record-count">{String(results.length).padStart(2, '0')}</span></div>
             <div className="case-events" aria-live="polite" aria-busy={running}>
+              <EventResponse />
               {results.length === 0 ? <div className="empty-record"><FileText size={30} strokeWidth={1} /><h3>{running ? t("Reality is deliberating.") : t("Nothing has happened. Yet.")}</h3><p>{running ? t("The first consequences are pending.") : t("All plans look reasonable before the consequences arrive.")}</p></div> : results.map((r, i) => <SegmentResult key={r.segmentId} result={r} index={i} />)}
               {running && <div className="running-note" role="status"><LoaderCircle size={14} className="animate-spin" /> {t("Recording consequences...")}</div>}
             </div>

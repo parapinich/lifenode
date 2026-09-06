@@ -102,7 +102,7 @@ it('keeps wait and conditional connections valid when adding a parallel decision
   const updated = useGraphStore.getState()
   expect(validateGraph(updated)).toEqual([])
   expect(computeGraph(updated, 20).timing.end.umurMulai).toBe(23)
-  expect(updated.nodes.filter((n) => n.kind === 'merge')).toHaveLength(2)
+  expect(updated.nodes.filter((n) => n.kind === 'merge')).toHaveLength(0)
 })
 
 it('retains state and memory across chapters, locks lived decisions, and propagates language', async () => {
@@ -133,7 +133,8 @@ it('retains state and memory across chapters, locks lived decisions, and propaga
 })
 
 it('pauses at a checkpoint; retry does not replay previous results', async () => {
-  const example = nextExample(-1, 'en', 0)
+  useGraphStore.getState().addDecision('Open a bookshop', 'karir')
+  const example = { graph: useGraphStore.getState(), kondisiAwal: useGraphStore.getState().kondisiAwal }
   const graph: Graph = {
     nodes: [...example.graph.nodes.filter((n) => n.id !== 'end'), { id: 'merge', kind: 'merge', x: 0, y: 0 }, { id: 'later', kind: 'aksi', lane: 'relasi', label: 'Meet a friend', durasi: 1, x: 0, y: 0 }, { id: 'end', kind: 'end', x: 0, y: 0 }],
     edges: [...example.graph.edges.map((e) => e.to === 'end' ? { ...e, to: 'merge' } : e), { id: 'next', from: 'merge', to: 'later' }, { id: 'finish', from: 'later', to: 'end' }],
