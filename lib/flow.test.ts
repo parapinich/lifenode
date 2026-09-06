@@ -4,6 +4,7 @@ import { useRunStore } from './runStore'
 import { useLocaleStore } from './locale'
 import { computeGraph, computeOneSegment, executionGraph, validateGraph } from './graph'
 import { executeGraph } from './runExecute'
+import { post, retryUntilFrom } from './apiPost'
 import { segmentActivities } from './mortality'
 import { prepareEvent, respondToEvent, eventOccurs } from './randomEvent'
 import { nextExample } from './examples'
@@ -82,7 +83,8 @@ it('persists an event roll on failure, pauses for a choice, and applies it once'
   const fetch = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue(Response.json(incident))
   vi.stubGlobal('fetch', fetch)
   await prepareEvent(id)
-  expect(useRunStore.getState().events[id].error).toBe(true)
+  // The cause has to survive to the UI, not collapse into a generic flag.
+  expect(useRunStore.getState().events[id].error).toContain('offline')
   vi.spyOn(Math, 'random').mockReturnValue(0.99)
   await prepareEvent(id)
   expect(JSON.parse(fetch.mock.calls[1][1].body).seed).toBe(0.1)
@@ -124,7 +126,7 @@ it('allows continuing after event failure and enforces the cooldown without anot
   useGraphStore.getState().insertNode('link', 'event')
   const id = useGraphStore.getState().nodes.find((n) => n.kind === 'event')!.id
   const state = { umur: 20, uang: 1000, energi: 90, reputasi: 50, kebahagiaan: 95, skill: [], relasi: [], ledger: [], hidup: true }
-  useRunStore.setState({ lifeState: state, nextSyncId: id, events: { [id]: { roll: 0.1, error: true } } })
+  useRunStore.setState({ lifeState: state, nextSyncId: id, events: { [id]: { roll: 0.1, error: 'Random event: Rate limited by Groq API' } } })
   expect(respondToEvent(id, 'skip')).toBe(true)
   expect(useRunStore.getState().events[id].skipped).toBe(true)
   const fetch = vi.fn()
@@ -147,4 +149,45 @@ it('builds a contextual event through the API and rejects an incorrect event age
   const invalid = await POST(new Request('http://localhost/api/event', { method: 'POST', body: JSON.stringify({ ...body, state: { ...body.state, umur: 90 } }) }))
   expect(invalid.status).toBe(400)
   expect(narrator).toHaveBeenCalledTimes(1)
+})
+
+it('keeps the failing stage, the server message and the rate-limit wait', async () => {
+  // A fresh Response per call — a body can only be read once.
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json({ error: 'Rate limited by Groq API', retryAfter: 42 }, { status: 429 })))
+  await expect(post('Risk assessment', '/api/simulate', {})).rejects.toThrow('Risk assessment: Rate limited by Groq API')
+  const before = Date.now()
+  const failure = await post('Risk assessment', '/api/simulate', {}).catch((e) => e)
+  expect(retryUntilFrom(failure)).toBeGreaterThanOrEqual(before + 42_000)
+
+  useLocaleStore.setState({ language: 'id' })
+  await expect(post('Risk assessment', '/api/simulate', {})).rejects.toThrow('Penilaian risiko: Rate limited by Groq API')
+
+  // A fault that isn't a rate limit must not park the player behind a countdown.
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json({ error: "Unknown sync point 'nope'" }, { status: 400 })))
+  const fault = await post('Simulation', '/api/simulate', {}).catch((e: Error) => e)
+  expect((fault as Error).message).toBe("Simulasi: Unknown sync point 'nope'")
+  expect(retryUntilFrom(fault)).toBeNull()
+})
+
+it('will not retry a rate-limited event until the window closes', async () => {
+  useGraphStore.getState().insertNode('link', 'event')
+  const id = useGraphStore.getState().nodes.find((n) => n.kind === 'event')!.id
+  useRunStore.setState({ lifeState: { umur: 20, uang: 1000, energi: 90, reputasi: 50, kebahagiaan: 95, skill: [], relasi: [], ledger: [], hidup: true }, nextSyncId: id })
+  vi.spyOn(Math, 'random').mockReturnValue(0.1)
+  const fetch = vi.fn(async () => Response.json({ error: 'Rate limited by Groq API', retryAfter: 30 }, { status: 429 }))
+  vi.stubGlobal('fetch', fetch)
+
+  await prepareEvent(id)
+  expect(useRunStore.getState().events[id].error).toContain('Rate limited by Groq API')
+  expect(useRunStore.getState().retryUntil).toBeGreaterThan(Date.now())
+
+  // Clicking again inside the window must not spend another request — that is
+  // what kept the limit open and stalled the chapter.
+  await prepareEvent(id)
+  await prepareEvent(id)
+  expect(fetch).toHaveBeenCalledTimes(1)
+
+  useRunStore.setState({ retryUntil: Date.now() - 1 })
+  await prepareEvent(id)
+  expect(fetch).toHaveBeenCalledTimes(2)
 })

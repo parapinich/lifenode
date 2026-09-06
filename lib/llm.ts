@@ -6,9 +6,28 @@ const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 
 export class LLMError extends Error {
   status: number
-  constructor(message: string, status: number) {
+  retryAfter?: number
+  constructor(message: string, status: number, retryAfter?: number) {
     super(message)
     this.status = status
+    this.retryAfter = retryAfter
+  }
+}
+
+// Groq sends `retry-after` in whole seconds; `x-ratelimit-reset-tokens` is
+// finer ("45.269s") and is the one that actually moves when TPM is the limit.
+function resetSeconds(headers: Headers): number | undefined {
+  const seconds = Number(headers.get('retry-after')) || Number(headers.get('x-ratelimit-reset-tokens')?.replace(/s$/, ''))
+  return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : undefined
+}
+
+// Every route reports LLM failures the same way: keep the upstream status (so a
+// 429 stays retryable instead of looking fatal) and pass the wait along.
+export function llmErrorBody(e: unknown, fallback: string) {
+  const llm = e instanceof LLMError ? e : null
+  return {
+    body: { error: llm?.message ?? (e instanceof Error ? e.message : fallback), retryAfter: llm?.retryAfter },
+    status: llm?.status ?? 502,
   }
 }
 
@@ -43,7 +62,7 @@ export async function callStructuredLLM<T>(
       })
       if (!res.ok) {
         if (res.status === 401 || res.status === 403) throw new LLMError('GROQ_API_KEY is invalid or missing', 500)
-        if (res.status === 429) throw new LLMError('Rate limited by Groq API, try again shortly', 429)
+        if (res.status === 429) throw new LLMError('Rate limited by Groq API', 429, resetSeconds(res.headers))
         const body = await res.text().catch(() => '')
         throw new LLMError(`Groq API error (${res.status}): ${body}`, 502)
       }

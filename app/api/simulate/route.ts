@@ -10,7 +10,7 @@ import {
 import { computeGraph, computeOneSegment, executionGraph, segmentCabang, validateGraph, GraphCycleError } from '@/lib/graph'
 import { hitungKepadatan } from '@/lib/engine'
 import { SYSTEM_PROMPT, buildSegmentUserMessage, narrativePrompt } from '@/lib/prompts'
-import { callStructuredLLM, LLMError } from '@/lib/llm'
+import { callStructuredLLM, llmErrorBody } from '@/lib/llm'
 import { decideMortality, livedActionIds, MortalityClockSchema, RiskAssessmentSchema, RISK_PROMPT, segmentActivities, validateAssessment } from '@/lib/mortality'
 
 const RequestSchema = z.object({
@@ -71,7 +71,8 @@ export async function POST(req: Request) {
       validateAssessment(assessment, activities)
       return NextResponse.json(assessment)
     } catch (e) {
-      return NextResponse.json({ error: e instanceof Error ? e.message : 'Risk assessment failed' }, { status: 502 })
+      const { body, status } = llmErrorBody(e, 'Risk assessment failed')
+      return NextResponse.json(body, { status })
     }
   }
   let decision
@@ -116,7 +117,7 @@ export async function POST(req: Request) {
     }
     return NextResponse.json(llmResponse)
   } catch (e) {
-    if (e instanceof LLMError) return NextResponse.json({ error: e.message }, { status: e.status })
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Segment failed to process' }, { status: 502 })
+    const { body, status } = llmErrorBody(e, 'Segment failed to process')
+    return NextResponse.json(body, { status })
   }
 }

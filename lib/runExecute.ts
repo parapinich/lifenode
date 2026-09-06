@@ -5,17 +5,21 @@ import { decideMortality, livedActionIds, RiskAssessmentSchema, segmentActivitie
 import { useRunStore } from './runStore'
 import { useHistoryStore } from './historyStore'
 import { translate, useLocaleStore } from './locale'
+import { post, retryUntilFrom } from './apiPost'
 import { GraphSchema, KondisiAwalSchema, IfResponseSchema, RingkasanResponseSchema, SegmentResponseSchema, type Edge, type KondisiAwal, type LifeNode, type LifeState } from './schema'
 
 export async function executeGraph(nodes: LifeNode[], edges: Edge[], kondisiAwal: KondisiAwal): Promise<void> {
   const run = useRunStore.getState()
   if (run.running || run.summaryLoading || run.chapterComplete || run.lifeState?.hidup === false) return
+  // Retrying inside the rate-limit window just earns another 429 and holds the
+  // window open. Guard here so every caller obeys it, not only the button.
+  if (run.retryUntil && run.retryUntil > Date.now()) return
   const language = useLocaleStore.getState().language
   let activeIds: string[] = []
   try {
     GraphSchema.parse({ nodes, edges })
     KondisiAwalSchema.parse(kondisiAwal)
-    const issues = validateGraph({ nodes, edges })
+    const issues = validateGraph({ nodes, edges }, language)
     if (issues.length) throw new Error(issues.map((issue) => issue.pesan).join('\n'))
     const start = nodes.find((n) => n.kind === 'start')!
     const initial: LifeState = { umur: kondisiAwal.umur, uang: kondisiAwal.uang, energi: 100, reputasi: 50, kebahagiaan: 50, skill: [], relasi: [], ledger: [], hidup: true }
@@ -23,7 +27,7 @@ export async function executeGraph(nodes: LifeNode[], edges: Edge[], kondisiAwal
       run.startRun(initial)
       useRunStore.setState({ initialConditions: { ...kondisiAwal }, nextSyncId: start.id, lockedNodeIds: [start.id] })
     } else {
-      useRunStore.setState({ running: true, error: null, summary: null, summaryError: null })
+      useRunStore.setState({ running: true, error: null, retryUntil: null, summary: null, summaryError: null })
     }
     const state = useRunStore.getState().lifeState!
     const cursor = useRunStore.getState().nextSyncId ?? start.id
@@ -35,9 +39,7 @@ export async function executeGraph(nodes: LifeNode[], edges: Edge[], kondisiAwal
     const choices = { ...run.selectedBranches }
     let branchNarrative: string | undefined = run.branchNarratives[cursor]
     if (nodes.find((n) => n.id === cursor)?.kind === 'if' && !choices[cursor]) {
-      const response = await fetch('/api/branch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ graph: { nodes, edges }, kondisiAwal, state, ifNodeId: cursor, language, choices }) })
-      if (!response.ok) throw new Error('Branch request failed')
-      const choice = IfResponseSchema.parse(await response.json())
+      const choice = IfResponseSchema.parse(await post('Branch decision', '/api/branch', { graph: { nodes, edges }, kondisiAwal, state, ifNodeId: cursor, language, choices }))
       const chosenEdge = edges.find((e) => e.id === choice.edgeId && e.from === cursor)
       if (!chosenEdge) throw new Error('Invalid branch')
       choices[cursor] = choice.edgeId
@@ -55,9 +57,7 @@ export async function executeGraph(nodes: LifeNode[], edges: Edge[], kondisiAwal
     let pending = useRunStore.getState().pendingRisk
     if (pending?.key !== key) {
       useRunStore.setState({ pendingRisk: null })
-      const assessmentResponse = await fetch('/api/simulate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...request, phase: 'assess' }) })
-      if (!assessmentResponse.ok) throw new Error('Risk assessment failed')
-      const assessment = RiskAssessmentSchema.parse(await assessmentResponse.json())
+      const assessment = RiskAssessmentSchema.parse(await post('Risk assessment', '/api/simulate', { ...request, phase: 'assess' }))
       validateAssessment(assessment, activities)
       pending = { key, assessment, decision: decideMortality(assessment, timing, segment.umurMulai, segment.umurSelesai, clock), clock }
       // Persist the decision before narration, including before a dangerous-action warning.
@@ -69,9 +69,7 @@ export async function executeGraph(nodes: LifeNode[], edges: Edge[], kondisiAwal
     const livedIds = livedActionIds(activities, timing, decision)
     activeIds = segment.nodeIds
     for (const id of activeIds) run.setNodeStatus(id, 'loading')
-    const response = await fetch('/api/simulate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...request, phase: 'simulate', assessment: pending.assessment }) })
-    if (!response.ok) throw new Error('Simulation request failed')
-    const result = SegmentResponseSchema.parse(await response.json())
+    const result = SegmentResponseSchema.parse(await post('Simulation', '/api/simulate', { ...request, phase: 'simulate', assessment: pending.assessment }))
     if (result.perNode.length !== livedIds.length || new Set(result.perNode.map((n) => n.nodeId)).size !== livedIds.length || result.perNode.some((n) => !livedIds.includes(n.nodeId))) throw new Error('Invalid decision outcomes')
     // Time is a game rule, not a number the narrator may improvise.
     const nextState = appendLedger(applyDelta(state, { ...result.stateBaru, hidup: !death, umur: death?.age ?? segment.umurSelesai }), result.kejadianPenting)
@@ -111,25 +109,26 @@ export async function executeGraph(nodes: LifeNode[], edges: Edge[], kondisiAwal
     }))
     if (nextState.hidup && nodes.find((n) => n.id === segment.syncEndId)?.kind === 'event') await prepareEvent(segment.syncEndId)
     run.finishRun()
-  } catch {
+  } catch (e) {
     for (const id of activeIds) run.setNodeStatus(id, 'idle')
-    run.fail(translate(language, 'Something went wrong. Your progress is saved; try again.'))
+    run.fail(e instanceof Error ? e.message : translate(language, 'Something went wrong. Your progress is saved; try again.'))
+    useRunStore.setState({ retryUntil: retryUntilFrom(e) })
   }
 }
 
 export async function fetchSummary(kondisiAwal: KondisiAwal, stateAkhir: LifeState): Promise<void> {
   const run = useRunStore.getState()
   if (run.running || run.summaryLoading) return
+  if (run.retryUntil && run.retryUntil > Date.now()) return
   const language = useLocaleStore.getState().language
   const initial = run.initialConditions ?? kondisiAwal
   run.requestSummary()
   try {
-    const res = await fetch('/api/summary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kondisiAwal: initial, stateAkhir, language }) })
-    if (!res.ok) throw new Error('Summary request failed')
-    const summary = RingkasanResponseSchema.parse(await res.json())
+    const summary = RingkasanResponseSchema.parse(await post('Summary', '/api/summary', { kondisiAwal: initial, stateAkhir, language }))
     run.setSummary(summary)
     useHistoryStore.getState().addEntry({ kondisiAwal: initial, stateAkhir, summary })
-  } catch {
-    run.failSummary(translate(language, 'Something went wrong. Your progress is saved; try again.'))
+  } catch (e) {
+    run.failSummary(e instanceof Error ? e.message : translate(language, 'Something went wrong. Your progress is saved; try again.'))
+    useRunStore.setState({ retryUntil: retryUntilFrom(e) })
   }
 }
