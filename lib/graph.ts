@@ -105,8 +105,8 @@ export function validateGraph(graph: Graph, language: 'en' | 'id' = 'en'): Valid
     if (n.kind === 'aksi') {
       if (!n.label) issues.push({ nodeId: n.id, pesan: say(`Step node '${n.id}' is missing a label`, `Keputusan '${n.id}' belum diberi nama`) })
     }
-    if ((n.kind === 'aksi' || n.kind === 'tunggu') && n.durasi !== undefined && (!Number.isFinite(n.durasi) || n.durasi < 0.5 || n.durasi > 15 || n.durasi % 0.5 !== 0)) {
-      issues.push({ nodeId: n.id, pesan: say(`Node '${label}' needs a duration of 0.5 to 15 years, in half-year steps`, `Keputusan '${label}' perlu durasi 0,5 sampai 15 tahun, kelipatan setengah tahun`) })
+    if ((n.kind === 'aksi' || n.kind === 'tunggu') && n.durasi !== undefined && (!Number.isFinite(n.durasi) || n.durasi < 0.5 || n.durasi % 0.5 !== 0)) {
+      issues.push({ nodeId: n.id, pesan: say(`Node '${label}' needs at least 0.5 years, in half-year steps`, `Keputusan '${label}' perlu durasi minimal 0,5 tahun, kelipatan setengah tahun`) })
     }
     if (n.kind === 'tunggu') {
       if (!n.durasi) issues.push({ nodeId: n.id, pesan: say(`Wait node '${n.id}' is missing a duration`, `Waktu tunggu '${n.id}' belum memiliki durasi`) })
@@ -278,6 +278,7 @@ export function computeGraph(graph: Graph, umurAwal: number): GraphComputation {
       const umurMulai = Math.max(umurAwal, ...inEdges.map((e) => timing[e.from].umurSelesai))
       const durasi = node.kind === 'aksi' ? (node.durasi ?? 1) : node.kind === 'tunggu' ? (node.durasi ?? 0) : 0
       timing[id] = { umurMulai, umurSelesai: umurMulai + durasi }
+      if (!Number.isFinite(timing[id].umurSelesai) || (durasi > 0 && timing[id].umurSelesai <= umurMulai)) throw new Error('Duration exceeds numeric precision')
     }
   }
 

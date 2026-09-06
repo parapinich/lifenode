@@ -56,8 +56,9 @@ try {
     await route.fulfill(eventCalls === 1 ? { status: 502, json: { error: 'offline' } } : { json: incident })
   })
   await page.route('**/api/simulate', async (route) => {
-    simulationCalls++
     const body = route.request().postDataJSON()
+    if (body.phase === 'assess') return route.fulfill({ json: { nodes: (body.fromSyncId === 'start' ? body.graph.nodes.filter((n) => n.kind === 'aksi' || n.kind === 'tunggu') : []).map((n) => ({ nodeId: n.id, category: 'safe', annualProbability: 0, reason: 'Ordinary activity.' })), suddenCause: 'An unexpected accident.' } })
+    simulationCalls++
     const actions = body.fromSyncId === 'start' ? body.graph.nodes.filter((n) => n.kind === 'aksi') : []
     await route.fulfill({ json: { narasiSegmen: 'The shop opens.', perNode: actions.map((n) => ({ nodeId: n.id, status: 'sukses', teks: 'Customers arrive.' })), narasiGap: [], kejadianPenting: [], stateBaru: { ...body.state, umur: body.state.umur + (actions.length ? 1 : 0) } } })
   })

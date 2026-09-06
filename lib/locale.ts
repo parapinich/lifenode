@@ -11,6 +11,11 @@ export const useLocaleStore = create<{ language: Language; setLanguage: (languag
 )
 
 const ID: Record<string, string> = {
+  'Interrupted': 'Terhenti', 'Fatal action': 'Tindakan fatal', 'High risk': 'Risiko tinggi', 'Risky action': 'Tindakan berisiko',
+  'Life ended': 'Hidup berakhir', 'Continue with risk': 'Lanjutkan dengan risiko',
+  'Review the risks before continuing.': 'Tinjau risiko sebelum melanjutkan.',
+  'Free choices, lasting consequences. Dangerous actions can end this life.': 'Bebas memilih, konsekuensi menetap. Tindakan berbahaya dapat mengakhiri hidup ini.',
+  'Age must be zero or greater. Check the starting conditions.': 'Usia minimal nol. Periksa kondisi awal.',
   'Dark mode': 'Mode gelap', 'Light mode': 'Mode terang',
   'Insert node': 'Sisipkan node', 'Cancel': 'Batal', 'Decision': 'Keputusan',
   'Node type': 'Jenis node', 'Random Event': 'Kejadian Acak', 'Surprise me': 'Beri kejutan',

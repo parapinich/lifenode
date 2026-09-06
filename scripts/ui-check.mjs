@@ -63,6 +63,7 @@ async function main() {
     await page.locator('.react-flow__node-aksi').first().waitFor()
     await page.route('**/api/simulate', async (route) => {
       const request = route.request().postDataJSON()
+      if (request.phase === 'assess') return route.fulfill({ json: { nodes: request.graph.nodes.filter((n) => n.kind === 'aksi' || n.kind === 'tunggu').map((n) => ({ nodeId: n.id, category: 'safe', annualProbability: 0, reason: 'Ordinary activity.' })), suddenCause: 'An unexpected accident.' } })
       requests.push(request)
       await new Promise((resolve) => setTimeout(resolve, 400))
       await route.fulfill({ json: {

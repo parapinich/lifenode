@@ -48,6 +48,8 @@ export default function Home() {
   const decisions = nodes.filter((n) => n.kind === 'aksi').length
   const stats = lifeState ?? { ...kondisiAwal, energi: 100, reputasi: 50, kebahagiaan: 50 }
   const waitingForEvent = useRunStore((s) => !!s.nextSyncId && !!s.events[s.nextSyncId]?.data && s.events[s.nextSyncId]?.choice === undefined)
+  const pendingRisk = useRunStore((s) => s.pendingRisk)
+  const riskWarnings = pendingRisk?.assessment.nodes.filter((n) => n.category !== 'safe') ?? []
   useEffect(() => { document.documentElement.lang = language }, [language])
 
   useEffect(() => {
@@ -73,7 +75,7 @@ export default function Home() {
       </header>
       <section className="intake-strip" aria-label={t("Starting conditions")}>
         <div className="intake-label"><span className="eyebrow">{t("01 / The subject")}</span><strong>{t("Initial conditions")}</strong></div>
-        <label><span>{t("Age")}</span><input aria-label={t("Age at intake")} type="number" min={0} max={100} value={kondisiAwal.umur} disabled={running || !!lifeState} onChange={(e) => setKondisiAwal({ umur: Number(e.target.value) })} /></label>
+        <label><span>{t("Age")}</span><input aria-label={t("Age at intake")} type="number" min={0} value={kondisiAwal.umur} disabled={running || !!lifeState} onChange={(e) => setKondisiAwal({ umur: Number(e.target.value) })} /></label>
         <label className="funds-input"><span>{t("Starting funds / $")}</span><input type="number" lang={language === 'id' ? 'id-ID' : 'en-US'} value={kondisiAwal.uang} disabled={running || !!lifeState} onChange={(e) => setKondisiAwal({ uang: Number(e.target.value) })} /></label>
         <label className="background-input"><span>{t("Background note")}</span><div><input type="text" maxLength={140} placeholder={t("An ordinary person. For now.")} value={kondisiAwal.latarBelakang} disabled={running || !!lifeState} onChange={(e) => setKondisiAwal({ latarBelakang: e.target.value })} /><button type="button" className="icon-button" title={t("Randomize background note")} aria-label={t("Randomize background note")} disabled={running || !!lifeState} onClick={() => setKondisiAwal({ latarBelakang: randomBackstory(language) })}><Dices size={17} /></button></div></label>
       </section>
@@ -82,7 +84,7 @@ export default function Home() {
           <NodePalette open={showPalette} onClose={() => setShowPalette(false)} />
           <section className="canvas-column" aria-label={t("Life plan")}>
             <div className="canvas-toolbar">
-              <div className="canvas-title"><span className="eyebrow">{t("02 / The plan")}</span><h2>{t("A life, pending.")}</h2></div>
+              <div className="canvas-title"><span className="eyebrow">{t("02 / The plan")}</span><h2>{t(lifeState?.hidup === false ? 'Life ended' : 'A life, pending.')}</h2></div>
               <div className="canvas-actions">
                 <button className="icon-button mobile-panel-button catalog-trigger" title={t("Decision catalog")} aria-label={t("Decision catalog")} aria-expanded={showPalette} onClick={() => { setShowPalette(!showPalette); setShowResults(false) }}><PanelLeft size={17} /></button>
                 <button className="icon-button" title={t('Your decision')} aria-label={t('Your decision')} onClick={() => setShowComposer(!showComposer)} aria-expanded={showComposer} disabled={running || summaryLoading || lifeState?.hidup === false}><Plus size={17} /></button>
@@ -91,13 +93,13 @@ export default function Home() {
                 <button className="icon-button" title={t("Tidy up node positions")} aria-label={t("Tidy up node positions")} onClick={applyAutoLayout} disabled={running || issues.length > 0}><LayoutGrid size={17} /></button>
                 <button className="icon-button mobile-panel-button" title={t("Case file")} aria-label={t("Case file")} aria-expanded={showResults} onClick={() => { setShowResults(!showResults); setShowPalette(false) }}><PanelRight size={17} /></button>
                 <button className="execute-button" disabled={!valid || running || summaryLoading || chapterComplete || lifeState?.hidup === false} onClick={() => { setShowResults(true); setShowPalette(false); setShowComposer(false); void executeGraph(nodes, edges, kondisiAwal) }} title={valid ? t("Execute life plan") : t("Resolve the outstanding issues")}>
-                  {running ? <LoaderCircle className="animate-spin" size={15} /> : <Play size={15} fill="currentColor" />}<span>{t(running ? 'Unfolding...' : waitingForEvent ? 'Choose a response' : chapterComplete ? 'Chapter complete' : runError ? 'Try again' : lifeState ? 'Continue chapter' : 'Run chapter')}</span>
+                  {running ? <LoaderCircle className="animate-spin" size={15} /> : <Play size={15} fill="currentColor" />}<span>{t(running ? 'Unfolding...' : lifeState?.hidup === false ? 'Life ended' : waitingForEvent ? 'Choose a response' : chapterComplete ? 'Chapter complete' : runError ? 'Try again' : riskWarnings.length ? 'Continue with risk' : lifeState ? 'Continue chapter' : 'Run chapter')}</span>
                 </button>
               </div>
             </div>
             {(!valid || runError || summaryError) && (
               <div className="case-alert" role={runError || summaryError ? 'alert' : undefined}>
-                {runError || summaryError || (!intakeValid ? t("Age must be between 0 and 100. Check the starting conditions.") : (
+                {runError || summaryError || (!intakeValid ? t("Age must be zero or greater. Check the starting conditions.") : (
                   <details><summary>{issues.length} {t('issues to resolve')}</summary>{issues.map((issue, i) => <p key={i}>{issue.pesan}</p>)}</details>
                 ))}
               </div>
@@ -115,6 +117,8 @@ export default function Home() {
             <dl className="resource-ledger">{STATS.map(({ key, label }) => <div key={key}><dt>{t(label)}</dt><dd>{key === 'uang' ? formatMoney(stats[key], language) : stats[key].toLocaleString(language === 'id' ? 'id-ID' : 'en-US')}{key !== 'umur' && key !== 'uang' && <meter min={0} max={100} value={stats[key]} aria-label={t(label)} />}</dd></div>)}</dl>
             <div className="record-heading"><span className="eyebrow">{t("Record of events")}</span><span className="record-count">{String(results.length).padStart(2, '0')}</span></div>
             <div className="case-events" aria-live="polite" aria-busy={running}>
+              {!lifeState && <p className="p-4 text-xs text-ink-soft">{t('Free choices, lasting consequences. Dangerous actions can end this life.')}</p>}
+              {!running && riskWarnings.length > 0 && <div className="p-4 text-xs text-stamp-red"><p>{t('Review the risks before continuing.')}</p>{riskWarnings.map((risk) => <p className="mt-2 break-words" key={risk.nodeId}><strong>{nodes.find((n) => n.id === risk.nodeId)?.label ?? t('Wait')}</strong>: {risk.reason}</p>)}</div>}
               <EventResponse />
               {results.length === 0 ? <div className="empty-record"><FileText size={30} strokeWidth={1} /><h3>{running ? t("Reality is deliberating.") : t("Nothing has happened. Yet.")}</h3><p>{running ? t("The first consequences are pending.") : t("All plans look reasonable before the consequences arrive.")}</p></div> : results.map((r, i) => <SegmentResult key={r.segmentId} result={r} index={i} />)}
               {running && <div className="running-note" role="status"><LoaderCircle size={14} className="animate-spin" /> {t("Recording consequences...")}</div>}

@@ -11,6 +11,7 @@ export function SegmentResult({ result, index }: { result: SegmentResultView; in
         {t('Chapter')} {index + 1}
       </div>
       <p className="font-sans text-sm leading-relaxed text-ink">{result.narasiSegmen}</p>
+      {result.death && <p className="mt-2 text-sm text-stamp-red">{t('Deceased')} / {t('age')} {Number(result.death.age.toFixed(2))}: {result.death.cause}</p>}
       {result.branchNarrative && <p className="mt-2 text-xs italic text-ink-soft">{result.branchNarrative}</p>}
 
       {result.perNode.length > 0 && (

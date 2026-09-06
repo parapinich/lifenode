@@ -7,6 +7,7 @@ import { useGraphStore } from '@/lib/store'
 import { useRunStore } from '@/lib/runStore'
 import { LANE_LABEL, LANE_STYLE, type LifeFlowNodeData } from './shared'
 import { Stamp } from './Stamp'
+import { RiskBadge } from './RiskBadge'
 import type { Lane, StatusNode } from '@/lib/schema'
 
 export function AksiNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
@@ -20,7 +21,7 @@ export function AksiNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
   const isSkipped = data.runStatus === 'skipped'
   const hasIssue = data.issues.length > 0 && !isSkipped
   const isLoading = data.runStatus === 'loading'
-  const isDone = data.runStatus === 'sukses' || data.runStatus === 'separuh' || data.runStatus === 'gagal'
+  const isDone = data.runStatus === 'sukses' || data.runStatus === 'separuh' || data.runStatus === 'gagal' || data.runStatus === 'fatal' || data.runStatus === 'terhenti'
 
   return (
     <div
@@ -83,7 +84,7 @@ export function AksiNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
       />
 
       <div className="mt-2 flex items-center gap-2">
-        <label className="flex items-center gap-2 font-mono text-[10px] text-ink-soft">{t('Duration')}<input className="nodrag w-14 rounded border border-line p-1" aria-label={t('Decision duration')} type="number" min={0.5} max={15} step={0.5} value={data.durasi ?? 1} disabled={running} onChange={(e) => updateNode(id, { durasi: Number(e.target.value) })} />{t('Years')}</label>
+        <label className="flex items-center gap-2 font-mono text-[10px] text-ink-soft">{t('Duration')}<input className="nodrag w-20 rounded border border-line p-1" aria-label={t('Decision duration')} type="number" min={0.5} step={0.5} value={data.durasi ?? 1} disabled={running} onChange={(e) => updateNode(id, { durasi: Number(e.target.value) })} />{t('Years')}</label>
       </div>
       <div className="mt-2 flex items-center gap-2">
         <span className="font-mono text-[10px] text-ink-soft">{t("Intensity")}</span>
@@ -101,7 +102,7 @@ export function AksiNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
         <span className="font-mono text-[10px] font-semibold text-ink">{data.intensity ?? 1}</span>
       </div>
 
-      <div className="mt-2 flex items-center justify-between border-t border-dashed border-line pt-1.5">
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-1 border-t border-dashed border-line pt-1.5">
         {data.umurMulai !== undefined ? (
           <span className="node-age font-mono text-xs font-semibold text-ink">
             {t("age")} {data.umurMulai} &rarr; {data.umurSelesai}
@@ -113,6 +114,7 @@ export function AksiNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
       </div>
 
       <Handle type="source" position={Position.Right} className="!bg-ink-soft" />
+      <RiskBadge id={id} />
       {!running && <div className="node-next nodrag"><button onClick={() => setAdding(adding === 'after' ? null : 'after')}>{t('After this')}</button><button onClick={() => setAdding(adding === 'parallel' ? null : 'parallel')}>{t('Meanwhile')}</button></div>}
       {adding && !running && <div className="node-composer nodrag nopan"><button className="icon-button" title={t('Close')} aria-label={t('Close')} onClick={() => setAdding(null)}><X size={14} /></button><DecisionComposer anchor={id} mode={adding} onAdded={() => setAdding(null)} /></div>}
     </div>

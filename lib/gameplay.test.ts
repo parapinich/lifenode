@@ -5,11 +5,13 @@ import { useGraphStore } from './store'
 import { useRunStore } from './runStore'
 import { useLocaleStore, translate, formatMoney } from './locale'
 import { executeGraph } from './runExecute'
+import { segmentActivities } from './mortality'
 import { narrativePrompt, SYSTEM_PROMPT } from './prompts'
 import type { Graph } from './schema'
 
 beforeEach(() => {
   useRunStore.getState().reset()
+  useRunStore.setState({ mortalityClock: { seed: 0.5, exposure: 0 } })
   useLocaleStore.setState({ language: 'en' })
   useGraphStore.setState({ nodes: [{ id: 'start', kind: 'start', x: 0, y: 0 }, { id: 'end', kind: 'end', x: 700, y: 0 }], edges: [], past: [], future: [], kondisiAwal: { umur: 20, uang: 1000, latarBelakang: 'A quiet life' } })
 })
@@ -88,6 +90,7 @@ function mockNarrator() {
     const graph = executionGraph(body.graph, body.choices ?? {})
     const { timing } = computeGraph(graph, body.kondisiAwal.umur)
     const segment = computeOneSegment(graph.nodes, graph.edges, timing, body.fromSyncId)
+    if (body.phase === 'assess') return Response.json({ nodes: segmentActivities(graph, segment).map((n) => ({ nodeId: n.id, category: 'safe', annualProbability: 0, reason: 'Ordinary activity.' })), suddenCause: 'An unexpected accident.' })
     return Response.json({ narasiSegmen: 'The bookshop found its readers.', narasiGap: [], perNode: segment.nodeIds.map((nodeId) => ({ nodeId, status: 'sukses', teks: 'Readers arrived.', alasan: 'You opened regularly.' })), stateBaru: { ...body.state, umur: 99, uang: body.state.uang + 100 }, kejadianPenting: ['The bookshop has regular readers.'] })
   })
 }
@@ -112,7 +115,7 @@ it('retains state and memory across chapters, locks lived decisions, and propaga
   vi.stubGlobal('fetch', fetch)
   useLocaleStore.setState({ language: 'id' })
   await executeGraph(graph.nodes, graph.edges, graph.kondisiAwal)
-  expect(fetch).toHaveBeenCalledTimes(1)
+  expect(fetch).toHaveBeenCalledTimes(2)
   expect(useRunStore.getState().lifeState?.umur).toBe(21)
   expect(useRunStore.getState().chapterComplete).toBe(true)
   const first = graph.nodes.find((n) => n.kind === 'aksi')!
@@ -123,7 +126,7 @@ it('retains state and memory across chapters, locks lived decisions, and propaga
   graph.nextChapter('Invite the regular readers to a picnic', 'relasi')
   const next = useGraphStore.getState()
   await executeGraph(next.nodes, next.edges, next.kondisiAwal)
-  const request = JSON.parse(fetch.mock.calls[1][1].body as string)
+  const request = JSON.parse(fetch.mock.calls[3][1].body as string)
   expect(request.language).toBe('id')
   expect(request.state.ledger).toEqual(['The bookshop has regular readers.'])
   expect(request.state.uang).toBe(1100)

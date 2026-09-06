@@ -62,6 +62,7 @@ export function Board() {
   const removeElements = useGraphStore((s) => s.removeElements)
   const lockedNodeIds = useRunStore((s) => s.lockedNodeIds)
   const nodeStatus = useRunStore((s) => s.nodeStatus)
+  const death = useRunStore((s) => s.death)
   const running = useRunStore((s) => s.running)
   const layoutVersion = useGraphStore((s) => s.layoutVersion)
   const { screenToFlowPosition, fitView, getNodes, setViewport } = useReactFlow()
@@ -141,13 +142,13 @@ export function Board() {
         deletable: n.kind !== 'start' && n.kind !== 'end' && !lockedNodeIds.includes(n.id),
         data: {
           ...n,
-          umurMulai: timing?.[n.id]?.umurMulai,
-          umurSelesai: timing?.[n.id]?.umurSelesai,
+          umurMulai: n.kind === 'end' && death ? Number(death.age.toFixed(2)) : timing?.[n.id]?.umurMulai,
+          umurSelesai: death && (nodeStatus[n.id] === 'fatal' || nodeStatus[n.id] === 'terhenti') ? Number(death.age.toFixed(2)) : timing?.[n.id]?.umurSelesai,
           issues: issuesByNode.get(n.id) ?? [],
           runStatus: nodeStatus[n.id],
         },
       })),
-    [nodes, timing, issuesByNode, nodeStatus, selectedNodeIds, lockedNodeIds, measured]
+    [nodes, timing, issuesByNode, nodeStatus, selectedNodeIds, lockedNodeIds, measured, death]
   )
 
   const [selectedEdgeIds, setSelectedEdgeIds] = useState<Set<string>>(new Set())
