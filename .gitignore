@@ -40,6 +40,9 @@ yarn-error.log*
 /AGENTS.md
 /CLAUDE.md
 /PLAN.md
+/catatan.md
+/codex.md
+/lifenode-ui-exploration-brief.md
 
 # local Claude Code config — personal/local automation, not shared
 /.claude/
