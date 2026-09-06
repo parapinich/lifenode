@@ -6,7 +6,7 @@ export type Lane = (typeof LANES)[number]
 export const NODE_KINDS = ['start', 'aksi', 'tunggu', 'merge', 'if', 'event', 'end'] as const
 export type NodeKind = (typeof NODE_KINDS)[number]
 
-export const STATUS_NODE = ['sukses', 'separuh', 'gagal'] as const
+export const STATUS_NODE = ['sukses', 'separuh', 'gagal', 'fatal', 'terhenti'] as const
 export type StatusNode = (typeof STATUS_NODE)[number]
 
 export const LifeNodeSchema = z
@@ -17,7 +17,7 @@ export const LifeNodeSchema = z
     y: z.number(),
     lane: z.enum(LANES).optional(),
     label: z.string().max(60).optional(),
-    durasi: z.number().min(0.5).max(15).multipleOf(0.5).optional(),
+    durasi: z.number().min(0.5).multipleOf(0.5).optional(),
     intensity: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
     note: z.string().max(140).optional(),
   })
@@ -35,7 +35,7 @@ export type LifeNode = z.infer<typeof LifeNodeSchema>
 // Kondisi awal (umur, uang, latar belakang) — input dari node start, terpisah
 // dari LifeNode karena bukan bagian graf yang dikirim ke LLM per segmen.
 export const KondisiAwalSchema = z.object({
-  umur: z.number().min(0).max(100),
+  umur: z.number().min(0),
   uang: z.number(),
   latarBelakang: z.string().max(140),
 })

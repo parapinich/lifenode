@@ -4,6 +4,8 @@ import { Trash2, Hourglass } from 'lucide-react'
 import { useGraphStore } from '@/lib/store'
 import { useRunStore } from '@/lib/runStore'
 import type { LifeFlowNodeData } from './shared'
+import { Stamp } from './Stamp'
+import { RiskBadge } from './RiskBadge'
 
 export function TungguNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
   const t = useT()
@@ -40,8 +42,8 @@ export function TungguNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
         <input
           type="number"
           aria-label={t("Years to wait")}
-          min={1}
-          max={15}
+          min={0.5}
+          step={0.5}
           className="nodrag w-12 rounded-md border border-line bg-transparent px-1 font-mono text-[11px] text-ink disabled:opacity-70"
           value={data.durasi ?? 1}
           disabled={running}
@@ -59,6 +61,8 @@ export function TungguNode({ id, data }: NodeProps<Node<LifeFlowNodeData>>) {
       )}
 
       <Handle type="source" position={Position.Right} className="!bg-ink-soft" />
+      <RiskBadge id={id} />
+      {(data.runStatus === 'fatal' || data.runStatus === 'terhenti') && <Stamp status={data.runStatus} className="text-[9px]" />}
     </div>
   )
 }

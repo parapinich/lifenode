@@ -4,6 +4,7 @@ import { useRunStore } from './runStore'
 import { useLocaleStore } from './locale'
 import { computeGraph, computeOneSegment, executionGraph, validateGraph } from './graph'
 import { executeGraph } from './runExecute'
+import { segmentActivities } from './mortality'
 import { prepareEvent, respondToEvent, eventOccurs } from './randomEvent'
 import { nextExample } from './examples'
 import { POST } from '../app/api/event/route'
@@ -57,6 +58,7 @@ it('runs all advanced examples in both languages, along every single If branch',
         const playable = executionGraph(body.graph, body.choices)
         const { timing } = computeGraph(playable, body.kondisiAwal.umur)
         const segment = computeOneSegment(playable.nodes, playable.edges, timing, body.fromSyncId)
+        if (body.phase === 'assess') return Response.json({ nodes: segmentActivities(playable, segment).map((n) => ({ nodeId: n.id, category: 'safe', annualProbability: 0, reason: 'Ordinary activity.' })), suddenCause: 'An unexpected accident.' })
         visited.push(...segment.nodeIds)
         return Response.json({ narasiSegmen: 'Life moves on.', perNode: segment.nodeIds.map((nodeId) => ({ nodeId, status: 'sukses', teks: nodeId })), narasiGap: [], kejadianPenting: [], stateBaru: { ...body.state, umur: segment.umurSelesai } })
       }))

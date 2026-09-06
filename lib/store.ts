@@ -32,7 +32,7 @@ interface GraphStore extends GraphSnapshot {
   redo: () => void
 }
 const endpoints: LifeNode[] = [{ id: 'start', kind: 'start', x: 40, y: 200 }, { id: 'end', kind: 'end', x: 720, y: 200 }]
-const busy = () => useRunStore.getState().running || useRunStore.getState().summaryLoading
+const busy = () => useRunStore.getState().running || useRunStore.getState().summaryLoading || useRunStore.getState().lifeState?.hidup === false
 export const edgeLocked = (e: Edge) => isNodeLocked(e.to) || !!useRunStore.getState().selectedBranches[e.from] || (isNodeLocked(e.from) && e.from !== useRunStore.getState().nextSyncId)
 
 export const useGraphStore = create<GraphStore>()(persist((set, get) => {
@@ -78,6 +78,7 @@ export const useGraphStore = create<GraphStore>()(persist((set, get) => {
     },
     updateNode: (id, patch) => {
       if (busy() || isNodeLocked(id)) return
+      useRunStore.setState({ pendingRisk: null })
       set((s) => ({ nodes: s.nodes.map((n) => n.id === id ? { ...n, ...patch } : n) }))
     },
     moveNode: (id, x, y) => set((s) => ({ nodes: s.nodes.map((n) => n.id === id ? { ...n, x, y } : n) })),
@@ -112,7 +113,7 @@ export const useGraphStore = create<GraphStore>()(persist((set, get) => {
       set((s) => ({ kondisiAwal: { ...s.kondisiAwal, ...patch } }))
     },
     loadTemplate: () => {
-      if (busy()) return
+      if (useRunStore.getState().running || useRunStore.getState().summaryLoading) return
       const run = useRunStore.getState()
       const language = useLocaleStore.getState().language
       if (run.lifeState && typeof window !== 'undefined' && !window.confirm(translate(language, 'Open another life? The current progress will be cleared.'))) return
@@ -151,7 +152,7 @@ export const useGraphStore = create<GraphStore>()(persist((set, get) => {
       useRunStore.setState({ nextSyncId: 'start', chapterComplete: false, lockedNodeIds: ['start'], selectedBranches: {}, branchNarratives: {}, nodeStatus: {}, error: null, summary: null, summaryError: null })
     },
     applyAutoLayout: () => {
-      if (busy()) return
+      if (useRunStore.getState().running || useRunStore.getState().summaryLoading) return
       const { nodes, edges, kondisiAwal } = get()
       try {
         const positions = autoLayout({ nodes, edges }, kondisiAwal.umur)

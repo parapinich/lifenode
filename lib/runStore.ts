@@ -1,12 +1,13 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import type { Death, MortalityClock, PendingRisk } from './mortality'
 import type { KondisiAwal, LifeState, RingkasanResponse, StatusNode, RandomEvent } from './schema'
 
 export interface EventRecord { roll: number; data?: RandomEvent; choice?: number; skipped?: boolean; error?: boolean }
 
 export type NodeRunStatus = 'idle' | 'loading' | StatusNode | 'skipped'
 
-const TERMINAL_STATUSES = new Set<NodeRunStatus>(['sukses', 'separuh', 'gagal'])
+const TERMINAL_STATUSES = new Set<NodeRunStatus>(['sukses', 'separuh', 'gagal', 'fatal', 'terhenti'])
 export function isTerminalStatus(status: NodeRunStatus | undefined): boolean {
   return status !== undefined && TERMINAL_STATUSES.has(status)
 }
@@ -17,9 +18,14 @@ export interface SegmentResultView {
   narasiGap: { lane: string; teks: string }[]
   perNode: { nodeId: string; status: StatusNode; teks: string; alasan?: string }[]
   branchNarrative?: string
+  death?: Death
+  risk?: PendingRisk
 }
 
 interface RunStore {
+  mortalityClock: MortalityClock | null
+  pendingRisk: PendingRisk | null
+  death: Death | null
   events: Record<string, EventRecord>
   lastEventAge: number | null
   running: boolean
@@ -50,6 +56,9 @@ interface RunStore {
 }
 
 export const useRunStore = create<RunStore>()(persist((set) => ({
+  mortalityClock: null,
+  pendingRisk: null,
+  death: null,
   events: {},
   lastEventAge: null,
   running: false,
@@ -84,7 +93,7 @@ export const useRunStore = create<RunStore>()(persist((set) => ({
   setSummary: (summary) => set({ summary, summaryLoading: false }),
   failSummary: (message) => set({ summaryLoading: false, summaryError: message }),
   closeSummary: () => set({ summary: null, summaryError: null }),
-  reset: () => set({ events: {}, lastEventAge: null, running: false, nextSyncId: null, chapterComplete: false, lockedNodeIds: [], selectedBranches: {}, branchNarratives: {}, initialConditions: null, nodeStatus: {}, initialState: null, lifeState: null, results: [], error: null, summary: null, summaryLoading: false, summaryError: null }),
+  reset: () => set({ mortalityClock: null, pendingRisk: null, death: null, events: {}, lastEventAge: null, running: false, nextSyncId: null, chapterComplete: false, lockedNodeIds: [], selectedBranches: {}, branchNarratives: {}, initialConditions: null, nodeStatus: {}, initialState: null, lifeState: null, results: [], error: null, summary: null, summaryLoading: false, summaryError: null }),
 }), {
   name: 'lifenode-run',
   partialize: (s) => ({ ...s, running: false, summaryLoading: false, nodeStatus: Object.fromEntries(Object.entries(s.nodeStatus).map(([id, status]) => [id, status === 'loading' ? 'idle' as const : status])) }),
